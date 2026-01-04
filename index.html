@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geo Insight</title>
+    <link rel="stylesheet" href="app.css">
+    <script src="https://cdn.plot.ly/plotly-3.3.1.min.js"></script>
+</head>
+<body>
+    <h1>Geo Insight - Stats Dashboard</h1>
+    
+    <div class="input-section">
+        <label for="ncfaCookie">NCFA Cookie:</label>
+        <input type="text" id="ncfaCookie" name="ncfaCookie" placeholder="Enter NCFA cookie">
+    </div>
+    
+    <div class="stats-container">
+        <h2>Performance Map</h2>
+        <div id="map"></div>
+    </div>
+    
+    <div class="stats-container">
+        <h2>All Guesses Map</h2>
+        <div id="guessesMap"></div>
+    </div>
+    
+    <div class="stats-container">
+        <h2>Average Score Difference Per Country (Moving Mode)</h2>
+        <div id="statsContent" class="loading">Loading data...</div>
+    </div>
+    
+    <script src="app.js"></script>
+    <script type="module" defer>
+        import { polyfillCountryFlagEmojis } from "https://cdn.skypack.dev/country-flag-emoji-polyfill";
+        polyfillCountryFlagEmojis();
+    </script>
+</body>
+</html>

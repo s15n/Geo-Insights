@@ -1,0 +1,74 @@
+body {
+    font-family: Arial, sans-serif;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #f5f5f5;
+}
+
+h1 {
+    color: #333;
+}
+
+.input-section {
+    margin-bottom: 30px;
+}
+
+.stats-container {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.country-stat {
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.country-stat.positive {
+    background: #e8f5e9;
+    border-color: #4caf50;
+}
+
+.country-stat.negative {
+    background: #ffebee;
+    border-color: #f44336;
+}
+
+.country-code {
+    font-weight: bold;
+    font-size: 16px;
+    font-family: 'Twemoji Country Flags', 'Apple Color Emoji', sans-serif;
+}
+
+.score-diff {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.score-diff.positive {
+    color: #4caf50;
+}
+
+.score-diff.negative {
+    color: #f44336;
+}
+
+.loading {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+}
