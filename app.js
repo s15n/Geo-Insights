@@ -1,5 +1,29 @@
 const BASE_URL = "http://localhost:3000"
 
+// Get ncfa cookie from localStorage
+function getNcfaCookie() {
+    return localStorage.getItem('ncfa_cookie');
+}
+
+// Check if user has provided ncfa cookie, redirect to login if not
+const ncfaCookie = getNcfaCookie();
+
+if (!ncfaCookie) {
+    window.location.href = '/login';
+    throw new Error('Redirecting to login...');
+}
+
+// Logout functionality
+document.addEventListener('DOMContentLoaded', () => {
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('ncfa_cookie');
+            window.location.href = '/login';
+        });
+    }
+});
+
 async function fetchGameTokens() {
     console.log("Fetching game tokens...");
     try {
@@ -12,7 +36,11 @@ async function fetchGameTokens() {
                 url.searchParams.append('paginationToken', paginationToken);
             }
             
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: {
+                    'x-ncfa-cookie': ncfaCookie
+                }
+            });
             if (!response.ok) {
                 throw new Error(`API request failed with status ${response.status}`);
             }
@@ -68,6 +96,7 @@ interface ModeStats {
 
 interface GameStats {
     rounds: number;
+    startTime: string;
     finalMultiplier: number;
     finalHealth: number;
     finalHealthDiff: number;
@@ -83,7 +112,7 @@ interface RoundStats {
     firstGuessTime: number;
     guessedFirst: boolean;
     countryCode: string;
-    panoId: string;
+    panorama: Panorama;
     bestGuessLat: number;
     bestGuessLng: number;
 }
@@ -115,8 +144,12 @@ async function getStats(gameTokens, numberOfGames) {
         try {
             const token = gameTokens[i];
             console.log(`Processing token: (${i}/${numberOfGames})`, token);
-
-            const response = await fetch(`${BASE_URL}/api/duels/${token}`);
+            
+            const response = await fetch(`${BASE_URL}/api/duels/${token}`, {
+                headers: {
+                    'x-ncfa-cookie': ncfaCookie
+                }
+            });
             const game = await response.json();
             console.log(game);
             
@@ -127,7 +160,7 @@ async function getStats(gameTokens, numberOfGames) {
             const isTeamDuels = game.options.isTeamDuels;
             const initialHealth = game.options.initialHealth;
 
-            const ownTeamIndex = game.teams.findIndex(team => team.players.some(player => player.playerId === TODO));
+            const ownTeamIndex = game.teams.findIndex(team => team.players.some(player => player.playerId === ""));
 
             if (ownTeamIndex !== 0 && ownTeamIndex !== 1) {
                 console.warn(`Player not found in game ${token}`);
@@ -158,38 +191,66 @@ async function getStats(gameTokens, numberOfGames) {
                 //isTeamDuels,
                 //initialHealth
             });
+            const gameIndex = modeStats.games.length - 1;
 
             let round = 0;
             let roundInfo = game.rounds[round];
             while (roundInfo = game.rounds[round]) {
                 const countryCode = roundInfo.panorama.countryCode;
-                const panorama = roundInfo.panorama;
+                const panoramaData = roundInfo.panorama;
+                const panorama = {
+                    panoId: panoramaData.panoId,
+                    lat: panoramaData.lat,
+                    lng: panoramaData.lng
+                };
 
                 const roundStartTime = new Date(roundInfo.startTime);
                 const roundFirstGuessTime = roundInfo.timerStartTime;
 
-                let guess1Time = ownTeam.players[0].guesses[round].created;
-                let guess2Time = ownTeam.players[1].guesses[round].created;
+                let guess1Time = ownTeam.players[0].guesses[round]?.created;
+                let guess2Time = ownTeam.players[1].guesses[round]?.created;
                 const guessedFirst = guess1Time === roundFirstGuessTime || guess2Time === roundFirstGuessTime;
-                guess1Time = new Date(guess1Time);
-                guess2Time = new Date(guess2Time);
+                guess1Time = guess1Time ? new Date(guess1Time) : null;
+                guess2Time = guess2Time ? new Date(guess2Time) : null;
 
                 const ownResult = ownResults[round];
                 const opponentResult = opponentResults[round];
+                
+                const didGuess = (!!guess1Time || !!guess2Time) && !!ownResult.bestGuess;
+                if (!didGuess) {
+                    console.log(`Did not guess for round ${round} in game ${token}, skipping`, roundInfo);
+                    round++;
+                    continue;
+                }
+
+                if (!ownResult || !opponentResult) {
+                    console.warn(`Missing results for round ${round} in game ${token}, skipping`, roundInfo);
+                    round++;
+                    continue;
+                }
 
                 const roundScore = ownResult.score;
                 const opponentScore = opponentResult.score;
                 const scoreDiff = roundScore - opponentScore;
 
-                const roundDistance = parseFloat(ownResult.bestGuess.distance);
+                const roundDistance = ownResult.bestGuess.distance;
 
                 const bestGuessLat = ownResult.bestGuess.lat;
                 const bestGuessLng = ownResult.bestGuess.lng;
 
-                const ownFirstGuessTime = (guess1Time > guess2Time ? guess2Time : guess1Time) - roundStartTime;
+                let ownFirstGuessTime = null;
+                if (guess1Time) {
+                    ownFirstGuessTime = guess1Time - roundStartTime;
+                }
+                if (guess2Time) {
+                    if (!!guess1Time && guess2Time < guess1Time) {
+                        ownFirstGuessTime = guess2Time - roundStartTime;
+                    }
+                }
                 
                 // Store round data
                 modeStats.rounds.push({
+                    game: gameIndex,
                     score: roundScore,
                     scoreDiff,
                     distance: roundDistance,
@@ -354,7 +415,7 @@ function displayPerformanceMap(cldrToIso) {
         return;
     }
     
-    const rounds = stats.noMove.rounds;
+    const rounds = stats.moving.rounds;
     
     if (rounds.length === 0) {
         console.warn('No round data available for map');
@@ -405,7 +466,6 @@ function displayPerformanceMap(cldrToIso) {
             `${cc}<br>Median: ${medians[i]}<br>Locations: ${locationCounts[i]}`
         ),
         hoverinfo: 'text',
-        customdata: locationCounts
     }];
     
     const layout = {
@@ -445,8 +505,11 @@ function displayGuessesMap() {
         lats.push(round.panorama.lat);
         lons.push(round.panorama.lng);
         scores.push(round.score);
-        hoverTexts.push(`Score: ${round.score}<br>Δ Score: ${round.scoreDiff > 0 ? '+' : ''}${round.scoreDiff}<br>Country: ${round.countryCode}`);
+        hoverTexts.push(`Score: ${round.score}<br>Δ Score: ${round.scoreDiff > 0 ? '+' : ''}${round.scoreDiff}<br>Country: ${round.countryCode}<br>${new Date(stats.moving.games[round.game]?.startTime).toLocaleDateString()}`);
     });
+
+    scores.push(0);
+    scores.push(5000);
     
     // Create scatter map data
     const data = [{
@@ -465,7 +528,7 @@ function displayGuessesMap() {
             colorbar: {
                 title: 'Score'
             },
-            showscale: true
+            showscale: true,
         },
         text: hoverTexts,
         hoverinfo: 'text'
@@ -494,6 +557,20 @@ function displayGuessesMap() {
             score: point.marker.color[point.pointNumber],
             text: point.text
         });*/
-        console.log('Hover data:', data);
+        //console.log('Hover data:', data);
+    });
+    mapElement.on('plotly_click', (data) => {
+        const point = data.points[0];
+        if (!point) 
+            return;
+
+        const i = point.pointNumber;
+        const round = stats.moving.rounds[i];
+        console.log('Click round:', round);
+
+        const panoId = round.panorama.panoId;
+        const decodedPanoId = String.fromCharCode(...panoId.match(/.{1,2}/g).map(hex => parseInt(hex, 16)));
+        const svUrl = `https://www.google.com/maps/@-4.2267238,-73.4826543,3a,75y,285.31h,90t/data=!3m7!1e1!3m5!1s${decodedPanoId}!2e0!6shttps:%2F%2Fstreetviewpixels-pa.googleapis.com%2Fv1%2Fthumbnail%3Fcb_client%3Dmaps_sv.tactile!7i13312!8i6656`
+        window.open(svUrl, '_blank');
     });
 }

@@ -14,7 +14,12 @@ app.use(express.static(path.join(__dirname)));
 // Proxy endpoint for fetching game data
 app.get('/api/duels/:token', async (req, res) => {
     const { token } = req.params;
+    const ncfa_cookie = req.headers['x-ncfa-cookie'];
     const BASE_URL_GAME_SERVER = "https://game-server.geoguessr.com/api";
+    
+    if (!ncfa_cookie) {
+        return res.status(400).json({ error: 'Missing ncfa cookie' });
+    }
     
     try {
         const response = await fetch(`${BASE_URL_GAME_SERVER}/duels/${token}`, {
@@ -37,8 +42,13 @@ app.get('/api/duels/:token', async (req, res) => {
 
 // Proxy endpoint for fetching feed/private
 app.get('/api/feed/private', async (req, res) => {
+    const ncfa_cookie = req.headers['x-ncfa-cookie'];
     const BASE_URL_V4 = "https://www.geoguessr.com/api/v4";
     const paginationToken = req.query.paginationToken;
+    
+    if (!ncfa_cookie) {
+        return res.status(400).json({ error: 'Missing ncfa cookie' });
+    }
     
     try {
         const url = new URL(`${BASE_URL_V4}/feed/private`);
@@ -62,6 +72,11 @@ app.get('/api/feed/private', async (req, res) => {
         console.error('Error fetching feed data:', error);
         res.status(500).json({ error: 'Internal server error', message: error.message });
     }
+});
+
+// Serve login page
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'login.html'));
 });
 
 // Serve index.html
