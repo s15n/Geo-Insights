@@ -24,10 +24,16 @@
     </div>
     
     <div class="stats-container">
-        <h2>Average Score Difference Per Country (Moving Mode)</h2>
+        <h2 id="modeTitle">Average Score Difference Per Country (Moving Mode)</h2>
         <div id="statsContent" class="loading">Loading data...</div>
     </div>
     
+    <div id="modeToggle" class="mode-toggle">
+        <div class="mode-option active" data-mode="moving">Moving</div>
+        <div class="mode-option" data-mode="noMove">No Move</div>
+        <div class="mode-option" data-mode="nmpz">NMPZ</div>
+    </div>
+
     <script src="app.js"></script>
     <script type="module" defer>
         import { polyfillCountryFlagEmojis } from "https://cdn.skypack.dev/country-flag-emoji-polyfill";

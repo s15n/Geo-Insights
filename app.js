@@ -13,7 +13,10 @@ if (!ncfaCookie) {
     throw new Error('Redirecting to login...');
 }
 
-// Logout functionality
+// Current mode state
+let currentMode = 'moving';
+
+// Logout functionality and mode toggle
 document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
@@ -22,7 +25,35 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = '/login';
         });
     }
+
+    // Mode toggle functionality
+    const modeOptions = document.querySelectorAll('.mode-option');
+    modeOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            // Remove active class from all options
+            modeOptions.forEach(opt => opt.classList.remove('active'));
+            // Add active class to clicked option
+            option.classList.add('active');
+            // Update current mode
+            currentMode = option.dataset.mode;
+            // Refresh displays
+            refreshDisplays();
+        });
+    });
 });
+
+function refreshDisplays() {
+    // Update title
+    const modeTitle = document.getElementById('modeTitle');
+    if (modeTitle) {
+        const modeName = currentMode === 'noMove' ? 'No Move' : currentMode === 'nmpz' ? 'NMPZ' : 'Moving';
+        modeTitle.textContent = `Average Score Difference Per Country (${modeName} Mode)`;
+    }
+    
+    displayPerformanceMap();
+    displayGuessesMap();
+    displayScoreDiffPerCountry();
+}
 
 async function fetchGameTokens() {
     console.log("Fetching game tokens...");
@@ -293,6 +324,8 @@ const loadSavedStats = true;
 let game_tokens = [];
 let stats = null;
 
+let cldrToIso = {};
+
 (async () => {
     if (loadSavedTokens) {
         game_tokens = await fetch('game_tokens.json').then(res => res.json());
@@ -313,7 +346,7 @@ let stats = null;
     displayScoreDiffPerCountry();
 
     cldrToIso = (await fetch('countries.json').then(res => res.json())).cldrToIso3166Alpha3;
-    displayPerformanceMap(cldrToIso);
+    displayPerformanceMap();
     displayGuessesMap();
 })();
 
@@ -341,12 +374,12 @@ function calculateMedian(values) {
 function displayScoreDiffPerCountry() {
     const statsContent = document.getElementById('statsContent');
     
-    if (!stats || !stats.moving || !stats.moving.rounds) {
+    if (!stats || !stats[currentMode] || !stats[currentMode].rounds) {
         statsContent.innerHTML = '<p>No data available</p>';
         return;
     }
     
-    const rounds = stats.moving.rounds;
+    const rounds = stats[currentMode].rounds;
     
     if (rounds.length === 0) {
         statsContent.innerHTML = '<p>No country data available</p>';
@@ -409,13 +442,13 @@ function displayScoreDiffPerCountry() {
     statsContent.appendChild(grid);
 }
 
-function displayPerformanceMap(cldrToIso) {
-    if (!stats || !stats.moving || !stats.moving.rounds) {
+function displayPerformanceMap() {
+    if (!stats || !stats[currentMode] || !stats[currentMode].rounds) {
         console.warn('No stats data available for map');
         return;
     }
     
-    const rounds = stats.moving.rounds;
+    const rounds = stats[currentMode].rounds;
     
     if (rounds.length === 0) {
         console.warn('No round data available for map');
@@ -483,12 +516,12 @@ function displayPerformanceMap(cldrToIso) {
 }
 
 function displayGuessesMap() {
-    if (!stats || !stats.moving || !stats.moving.rounds) {
-        console.warn('No stats data available for guesses map');
+    if (!stats || !stats[currentMode] || !stats[currentMode].rounds) {
+        console.warn('No stats data available for performance map');
         return;
     }
     
-    const rounds = stats.moving.rounds;
+    const rounds = stats[currentMode].rounds;
     
     if (rounds.length === 0) {
         console.warn('No round data available for guesses map');
@@ -505,7 +538,7 @@ function displayGuessesMap() {
         lats.push(round.panorama.lat);
         lons.push(round.panorama.lng);
         scores.push(round.score);
-        hoverTexts.push(`Score: ${round.score}<br>Δ Score: ${round.scoreDiff > 0 ? '+' : ''}${round.scoreDiff}<br>Country: ${round.countryCode}<br>${new Date(stats.moving.games[round.game]?.startTime).toLocaleDateString()}`);
+        hoverTexts.push(`Score: ${round.score}<br>Δ Score: ${round.scoreDiff > 0 ? '+' : ''}${round.scoreDiff}<br>Country: ${round.countryCode}<br>${new Date(stats[currentMode].games[round.game]?.startTime).toLocaleDateString()}`);
     });
 
     scores.push(0);
@@ -565,7 +598,7 @@ function displayGuessesMap() {
             return;
 
         const i = point.pointNumber;
-        const round = stats.moving.rounds[i];
+        const round = stats[currentMode].rounds[i];
         console.log('Click round:', round);
 
         const panoId = round.panorama.panoId;
