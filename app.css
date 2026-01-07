@@ -50,7 +50,7 @@ h1 {
 
 .country-code {
     font-weight: bold;
-    font-size: 16px;
+    font-size: 20px;
     font-family: 'Twemoji Country Flags', 'Apple Color Emoji', sans-serif;
 }
 
@@ -111,4 +111,8 @@ h1 {
 
 .mode-option.active:hover {
     background: #45a049;
+}
+
+g.xtick text {
+    font-family: 'Twemoji Country Flags', 'Apple Color Emoji', sans-serif !important;
 }

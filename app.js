@@ -1,5 +1,9 @@
 const BASE_URL = "http://localhost:3000"
 
+// TODO: remove hardcoding, offer selection after login
+const ownPlayerId = "";
+const teamMateId = "";
+
 // Get ncfa cookie from localStorage
 function getNcfaCookie() {
     return localStorage.getItem('ncfa_cookie');
@@ -11,6 +15,15 @@ const ncfaCookie = getNcfaCookie();
 if (!ncfaCookie) {
     window.location.href = '/login';
     throw new Error('Redirecting to login...');
+}
+
+// Backup preference: default ON
+if (localStorage.getItem('enable_duel_backup') === null) {
+    localStorage.setItem('enable_duel_backup', '1');
+}
+
+function isBackupEnabled() {
+    return localStorage.getItem('enable_duel_backup') === '1';
 }
 
 // Current mode state
@@ -40,6 +53,37 @@ document.addEventListener('DOMContentLoaded', () => {
             refreshDisplays();
         });
     });
+
+    // Discreet backup toggle in corner
+    const toggleContainer = document.createElement('div');
+    toggleContainer.style.background = 'rgba(255,255,255,0.9)';
+    toggleContainer.style.border = '1px solid #ccc';
+    toggleContainer.style.borderRadius = '6px';
+    toggleContainer.style.padding = '6px 8px';
+    toggleContainer.style.fontSize = '12px';
+    toggleContainer.style.boxShadow = '0 1px 4px rgba(0,0,0,0.1)';
+
+    const label = document.createElement('label');
+    label.style.display = 'flex';
+    label.style.alignItems = 'center';
+    label.style.gap = '6px';
+    label.title = 'Toggle backing up duels game data on the server';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = isBackupEnabled();
+    checkbox.addEventListener('change', () => {
+        localStorage.setItem('enable_duel_backup', checkbox.checked ? '1' : '0');
+    });
+
+    const span = document.createElement('span');
+    span.textContent = 'Save duels';
+    span.style.userSelect = 'none';
+
+    label.appendChild(checkbox);
+    label.appendChild(span);
+    toggleContainer.appendChild(label);
+    document.body.appendChild(toggleContainer);
 });
 
 function refreshDisplays() {
@@ -52,16 +96,25 @@ function refreshDisplays() {
     
     displayPerformanceMap();
     displayGuessesMap();
+    displayBoxplot();
     displayScoreDiffPerCountry();
 }
 
 async function fetchGameTokens() {
     console.log("Fetching game tokens...");
+    
+    const tokens = {
+        "singlePlayer": [],
+        "soloDuels": [],
+        "teamDuels": [],
+        "otherGames": [],
+    };
+
     try {
         let paginationToken = null;
-        const tokens = [];
         
         while (true) {
+            // TODO: Can see statistics of friends as well, using /friends instead of /private
             const url = new URL(`${BASE_URL}/api/feed/private`);
             if (paginationToken) {
                 url.searchParams.append('paginationToken', paginationToken);
@@ -82,29 +135,76 @@ async function fetchGameTokens() {
                 break;
             }
             
-            for (const entry of data.entries) {
-                try {
-                    const payloadJson = JSON.parse(entry.payload);
-                    for (const payload of payloadJson) {
-                        if (payload?.payload?.gameMode === 'TeamDuels') {
-                            tokens.push(payload.payload.gameId);
+            function addEntries(entries) {
+                for (const entry of entries) {
+                    // payload, time, type, user: {id, ...}
+                    let payload = entry.payload;
+                    if (typeof payload === "string") {
+                        try {
+                            payload = JSON.parse(entry.payload);
+                        } catch (parseError) {
+                            console.warn('Failed to parse entry payload:', parseError, entry.payload);
+                            continue;
                         }
                     }
-                } catch (parseError) {
-                    console.warn('Failed to parse entry payload:', parseError, entry.payloadJson);
-                    continue;
+
+                    const entryType = entry.type;
+                    if (entryType === 7) { // Collection of entries
+                        addEntries(payload);
+                    } else if (entryType === 1) { // Singleplayer game
+                        // mapSlug, mapName, points, gameToken, gameMode
+                        tokens.singlePlayer.push({
+                            token: payload.gameToken,
+                            type: entryType,
+                            mode: payload.gameMode,
+                        });
+                    } else if (entryType === 2) { // Challenge
+                        // mapSlug, mapName, points, challengeToken, gameMode, isDailyChallenge
+                        tokens.singlePlayer.push({
+                            token: payload.challengeToken,
+                            type: entryType,
+                            mode: payload.gameMode,
+                            dailyChallenge: payload.isDailyChallenge || false,
+                        });
+                    } else if (entryType === 6) { // Team duel
+                        // gameId, gameMode, competitiveGameMode
+                        tokens.teamDuels.push(payload.gameId);
+                    } else {
+                        // 4 = Achievement Unlocked
+                        // 9 = Party Game: gameId, partyId, gameMode
+                        // 11 = Unranked Duel: gameId, gameMode, competitiveGameMode
+                        tokens.otherGames.push({
+                            type: entryType,
+                            payload: payload,
+                        });
+                    }
                 }
             }
+            addEntries(data.entries);
             
             paginationToken = data.paginationToken;
-            if (!paginationToken) break;
+            if (!paginationToken)
+                break;
         }
         
         console.log(`Fetched ${tokens.length} game tokens`);
-        return tokens;
     } catch (error) {
         console.error('Error fetching game tokens:', error);
-        return [];
+    }
+    try {
+        backupFetchedGameTokens(tokens);
+    } catch (e) {
+        console.warn('Error backing up tokens:', e);
+    }
+    return tokens;
+}
+
+// Backup fetched game tokens in browser localStorage for recovery
+function backupFetchedGameTokens(tokens) {
+    try {
+        localStorage.setItem('backup_game_tokens', JSON.stringify(tokens));
+    } catch (err) {
+        console.warn('Failed to backup fetched game tokens to localStorage', err);
     }
 }
 
@@ -176,10 +276,12 @@ async function getStats(gameTokens, numberOfGames) {
             const token = gameTokens[i];
             console.log(`Processing token: (${i}/${numberOfGames})`, token);
             
+            const duelHeaders = {
+                'x-ncfa-cookie': ncfaCookie
+            };
+            if (isBackupEnabled()) duelHeaders['x-backup'] = '1';
             const response = await fetch(`${BASE_URL}/api/duels/${token}`, {
-                headers: {
-                    'x-ncfa-cookie': ncfaCookie
-                }
+                headers: duelHeaders
             });
             const game = await response.json();
             console.log(game);
@@ -187,19 +289,29 @@ async function getStats(gameTokens, numberOfGames) {
             const gameMode = getGameMode(game);
             const modeStats = stats[gameMode];
             
-            const ranked = game.options.isRated;
-            const isTeamDuels = game.options.isTeamDuels;
-            const initialHealth = game.options.initialHealth;
+            /*
+            Not needed for now
+            const ranked = game.options.isRated; // should always be true
+            const isTeamDuels = game.options.isTeamDuels; // should always be true
+            const initialHealth = game.options.initialHealth; // should always be 6000
+            */
 
-            const ownTeamIndex = game.teams.findIndex(team => team.players.some(player => player.playerId === ""));
+            // TODO: select by team instead of player ID
+            const ownTeamIndex = game.teams.findIndex(team => team.players.some(player => player.playerId === ownPlayerId));
 
             if (ownTeamIndex !== 0 && ownTeamIndex !== 1) {
-                console.warn(`Player not found in game ${token}`);
+                console.warn(`Own player not found in game ${token}`);
                 continue;
             }
 
             const ownTeam = game.teams[ownTeamIndex];
             const opponentTeam = game.teams[1 - ownTeamIndex];
+
+            const hasSelectedTeamMate = ownTeam.players.findIndex(player => player.playerId === teamMateId) !== -1;
+            if (!hasSelectedTeamMate) {
+                console.warn(`Team mate not found in own team for game ${token}`);
+                continue;
+            }
 
             const ownResults = ownTeam.roundResults;
             const opponentResults = opponentTeam.roundResults;
@@ -328,10 +440,12 @@ let cldrToIso = {};
 
 (async () => {
     if (loadSavedTokens) {
-        game_tokens = await fetch('game_tokens.json').then(res => res.json());
-        console.log(game_tokens.length, 'game tokens loaded');
+        game_tokens = await fetch('tokens.json').then(res => res.json());
+        game_tokens = game_tokens.teamDuels; // TODO
+        console.log(game_tokens.length, "game tokens loaded");
     } else {
         game_tokens = await fetchGameTokens();
+        game_tokens = game_tokens.teamDuels; // TODO
         console.log('Game tokens fetched:', game_tokens);
     }
 
@@ -342,12 +456,10 @@ let cldrToIso = {};
         stats = await processGameTokens(game_tokens);
         console.log('Data loaded:', stats);
     }
-    
-    displayScoreDiffPerCountry();
 
     cldrToIso = (await fetch('countries.json').then(res => res.json())).cldrToIso3166Alpha3;
-    displayPerformanceMap();
-    displayGuessesMap();
+    
+    refreshDisplays();
 })();
 
 
@@ -606,4 +718,96 @@ function displayGuessesMap() {
         const svUrl = `https://www.google.com/maps/@-4.2267238,-73.4826543,3a,75y,285.31h,90t/data=!3m7!1e1!3m5!1s${decodedPanoId}!2e0!6shttps:%2F%2Fstreetviewpixels-pa.googleapis.com%2Fv1%2Fthumbnail%3Fcb_client%3Dmaps_sv.tactile!7i13312!8i6656`
         window.open(svUrl, '_blank');
     });
+}
+
+function displayBoxplot() {
+    if (!stats || !stats[currentMode] || !stats[currentMode].rounds) {
+        console.warn('No stats data available for boxplot');
+        return;
+    }
+    
+    const rounds = stats[currentMode].rounds;
+    
+    if (rounds.length === 0) {
+        console.warn('No round data available for boxplot');
+        return;
+    }
+    
+    // Collect all score diffs by country
+    const scoreDiffsByCountry = {};
+    
+    rounds.forEach(round => {
+        const cc = round.countryCode;
+        if (!scoreDiffsByCountry[cc]) {
+            scoreDiffsByCountry[cc] = [];
+        }
+        scoreDiffsByCountry[cc].push(round.scoreDiff);
+    });
+    
+    // Calculate medians and sort countries by median
+    const countriesWithMedian = Object.keys(scoreDiffsByCountry).map(cc => {
+        const values = scoreDiffsByCountry[cc];
+        const sorted = [...values].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        const median = sorted.length % 2 === 0 
+            ? (sorted[mid - 1] + sorted[mid]) / 2
+            : sorted[mid];
+        return { country: cc, median: median, values: values };
+    });
+    
+    // Sort by median (descending)
+    countriesWithMedian.sort((a, b) => b.median - a.median);
+    
+    // Prepare data for boxplot
+    const traces = countriesWithMedian.map(item => ({
+        y: item.values,
+        type: 'box',
+        name: countryCodeToFlag(item.country),
+        customdata: item.values.map(() => ({
+            country: item.country,
+            countryFlag: countryCodeToFlag(item.country),
+            median: item.median,
+            count: item.values.length
+        })),
+        hovertemplate: 
+            '<b style="font-family: \'Twemoji Country Flags\', \'Apple Color Emoji\', sans-serif;">%{customdata.countryFlag}</b>&nbsp;' +
+            'Score Difference %{y}<br>' +
+            '<extra></extra>',
+        boxmean: false,
+        marker: {
+            color: '#4caf50'
+        }
+    }));
+    // TODO: better labels for the boxes, not just the outliers
+    
+    // Show only a subset of countries at once (20 countries)
+    const visibleCountries = 20;
+    const totalCountries = traces.length;
+    
+    const layout = {
+        title: 'Score Difference Distribution by Country (Sorted by Median)',
+        yaxis: {
+            title: 'Score Difference',
+            range: [-5050, 5050],
+            dtick: 1000,
+            zeroline: true,
+            zerolinecolor: '#666',
+            zerolinewidth: 2
+        },
+        xaxis: {
+            title: 'Country',
+            range: [-0.5, Math.min(visibleCountries - 0.5, totalCountries - 0.5)],
+            rangeslider: { visible: true }
+        },
+        showlegend: false,
+        height: 700,
+        margin: { t: 50, b: 150 }
+    };
+    
+    const config = {
+        responsive: true,
+        scrollZoom: true
+    };
+    
+    Plotly.newPlot('boxplot', traces, layout, config);
 }

@@ -1,9 +1,17 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs').promises;
 
 const app = express();
 const PORT = 3000;
+
+const BACKUPS_DUELS_DIR = path.join(__dirname, 'backups', 'duels');
+
+// Ensure backups directory exists at startup to avoid mkdir on every request
+fs.mkdir(BACKUPS_DUELS_DIR, { recursive: true }).catch(err => {
+    console.error('Failed to ensure backups directory exists:', err);
+});
 
 // Middleware
 app.use(cors());
@@ -15,10 +23,37 @@ app.use(express.static(path.join(__dirname)));
 app.get('/api/duels/:token', async (req, res) => {
     const { token } = req.params;
     const ncfa_cookie = req.headers['x-ncfa-cookie'];
+    const backupHeader = req.headers['x-backup'];
     const BASE_URL_GAME_SERVER = "https://game-server.geoguessr.com/api";
     
     if (!ncfa_cookie) {
         return res.status(400).json({ error: 'Missing ncfa cookie' });
+    }
+
+    /*
+    The backups are done to
+    a) reduce load on the GeoGuessr servers
+    b) be able to serve data even if GeoGuessr is down
+    c) be able to analyze historical data (> 1 year old games are not available on GeoGuessr)
+    */
+
+    // Prefer local backup if available to avoid unnecessary API calls
+    try {
+        const safeToken = token.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const backupPath = path.join(BACKUPS_DUELS_DIR, `${safeToken}.json`);
+        const contents = await fs.readFile(backupPath, 'utf8');
+        try {
+            const parsed = JSON.parse(contents);
+            return res.json(parsed);
+        } catch (parseErr) {
+            console.error('Failed to parse backup JSON for token', token, parseErr);
+            // fall through to fetch fresh copy
+        }
+    } catch (readErr) {
+        if (readErr.code !== 'ENOENT') {
+            console.error('Error reading backup file for token', token, readErr);
+        }
+        // If file doesn't exist, continue to fetch from API
     }
     
     try {
@@ -33,6 +68,15 @@ app.get('/api/duels/:token', async (req, res) => {
         }
         
         const data = await response.json();
+        if (backupHeader) {
+            try {
+                const safeToken = token.replace(/[^a-zA-Z0-9_-]/g, '_');
+                const filePath = path.join(BACKUPS_DUELS_DIR, `${safeToken}.json`);
+                await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+            } catch (err) {
+                console.error('Failed to write duel backup for token', token, err);
+            }
+        }
         res.json(data);
     } catch (error) {
         console.error('Error fetching game data:', error);

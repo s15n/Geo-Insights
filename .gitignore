@@ -1,5 +1,8 @@
 secrets.txt
-game_tokens.json
+requests.txt
 stats.json
+tokens.json
+
+backups/
 
 node_modules/
