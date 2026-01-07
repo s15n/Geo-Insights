@@ -14,11 +14,16 @@ h1 {
     margin-bottom: 30px;
 }
 
+.stats {
+    display: contents;
+}
+
 .stats-container {
     background: white;
     border-radius: 8px;
     padding: 20px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    margin-bottom: 16px;
 }
 
 .stats-grid {
@@ -115,4 +120,43 @@ h1 {
 
 g.xtick text {
     font-family: 'Twemoji Country Flags', 'Apple Color Emoji', sans-serif !important;
+}
+
+/* Backup toggle styling moved from inline styles */
+.backup-toggle {
+    position: fixed;
+    left: 12px;
+    bottom: 12px;
+    background: rgba(255,255,255,0.9);
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    z-index: 9999;
+}
+.backup-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: default;
+}
+.backup-toggle label[title] {
+    /* preserve tooltip behavior */
+}
+
+/* Metric selector styling */
+.metric-selector {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 8px;
+}
+.metric-selector label {
+    font-size: 12px;
+    color: #444;
+}
+.metric-selector select {
+    font-size: 12px;
+    padding: 4px 6px;
 }

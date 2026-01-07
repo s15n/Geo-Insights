@@ -56,17 +56,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Discreet backup toggle in corner
     const toggleContainer = document.createElement('div');
-    toggleContainer.style.background = 'rgba(255,255,255,0.9)';
-    toggleContainer.style.border = '1px solid #ccc';
-    toggleContainer.style.borderRadius = '6px';
-    toggleContainer.style.padding = '6px 8px';
-    toggleContainer.style.fontSize = '12px';
-    toggleContainer.style.boxShadow = '0 1px 4px rgba(0,0,0,0.1)';
+    toggleContainer.className = 'backup-toggle';
 
     const label = document.createElement('label');
-    label.style.display = 'flex';
-    label.style.alignItems = 'center';
-    label.style.gap = '6px';
     label.title = 'Toggle backing up duels game data on the server';
 
     const checkbox = document.createElement('input');
@@ -84,6 +76,48 @@ document.addEventListener('DOMContentLoaded', () => {
     label.appendChild(span);
     toggleContainer.appendChild(label);
     document.body.appendChild(toggleContainer);
+    // Create metric selectors for each statistic
+    function createMetricSelector(parentSelector, id, includeGuessedFirst, defaultSelected = 'scoreDiff') {
+        const parent = document.querySelector(parentSelector);
+        if (!parent) return;
+        const container = document.createElement('div');
+        container.className = 'metric-selector';
+
+        const label = document.createElement('label');
+        label.textContent = 'Metric:';
+
+        const select = document.createElement('select');
+        select.id = id;
+
+        const options = [
+            { v: 'scoreDiff', t: 'Score Difference' },
+            { v: 'score', t: 'Score' },
+            //{ v: 'distance', t: 'Distance' }
+        ];
+        options.forEach(o => select.appendChild(new Option(o.t, o.v)));
+        if (includeGuessedFirst) {
+            select.appendChild(new Option('Guessed-first rate', 'guessedFirstRate'));
+        }
+
+        select.value = defaultSelected;
+
+        select.addEventListener('change', () => refreshDisplays());
+
+        container.appendChild(label);
+        container.appendChild(select);
+        // insert container after the heading inside the stats container
+        const heading = parent.querySelector('h2') || parent.querySelector('h1');
+        if (heading && heading.parentNode) {
+            heading.parentNode.insertBefore(container, heading.nextSibling);
+        } else {
+            parent.insertBefore(container, parent.firstChild);
+        }
+    }
+
+    createMetricSelector('.stats-container:nth-of-type(1)', 'map-metric-select', true);
+    createMetricSelector('.stats-container:nth-of-type(2)', 'guesses-metric-select', false, 'score');
+    createMetricSelector('.stats-container:nth-of-type(3)', 'boxplot-metric-select', false);
+    createMetricSelector('.stats-container:nth-of-type(4)', 'countrylist-metric-select', true);
 });
 
 function refreshDisplays() {
@@ -483,6 +517,26 @@ function calculateMedian(values) {
         : sorted[mid];
 }
 
+const scoreColorscale = [
+    [0, '#f44336'],      
+    [0.75, '#ffee53ff'],    
+    [0.95, '#88cc8aff'],  
+    [1, '#90f3ebff'],
+];
+const scoreDiffColorscale = [
+    [0, '#f44336'],
+    [0.45, '#ffd0c8ff'],
+    [0.5, '#f9f9f9'],
+    [0.55, '#c1f3c0ff'],
+    [1, '#4caf50']
+];
+const rateColorScale = [
+    [0, '#f44336'],
+    [0.5, '#f9f9f9'],
+    [1, '#4caf50']
+];
+const distanceColorscale = undefined; // TODO
+
 function displayScoreDiffPerCountry() {
     const statsContent = document.getElementById('statsContent');
     
@@ -498,53 +552,65 @@ function displayScoreDiffPerCountry() {
         return;
     }
     
-    // Collect all score diffs by country
-    const scoreDiffsByCountry = {};
-    
+    const metric = (document.getElementById('countrylist-metric-select') || { value: 'scoreDiff' }).value;
+    const valuesByCountry = {};
     rounds.forEach(round => {
         const cc = round.countryCode;
-        if (!scoreDiffsByCountry[cc]) {
-            scoreDiffsByCountry[cc] = [];
-        }
-        scoreDiffsByCountry[cc].push(round.scoreDiff);
+        if (!valuesByCountry[cc]) valuesByCountry[cc] = [];
+        if (metric === 'guessedFirstRate') valuesByCountry[cc].push(round.guessedFirst ? 1 : 0);
+        else if (metric === 'score') valuesByCountry[cc].push(round.score);
+        else if (metric === 'distance') valuesByCountry[cc].push(round.distance);
+        else valuesByCountry[cc].push(round.scoreDiff);
     });
-    
-    // Calculate medians and prepare for display
-    const countries = Object.keys(scoreDiffsByCountry).map(cc => {
-        const medianScoreDiff = calculateMedian(scoreDiffsByCountry[cc]);
-        return [cc, medianScoreDiff, scoreDiffsByCountry[cc].length];
-    }).sort((a, b) => b[1] - a[1]); // Sort by median score diff (highest to lowest)
+
+    const countries = Object.keys(valuesByCountry).map(cc => {
+        const vals = valuesByCountry[cc];
+        let value;
+        if (metric === 'guessedFirstRate') {
+            const sum = vals.reduce((a, b) => a + b, 0);
+            value = vals.length ? (sum / vals.length) : 0;
+        } else {
+            value = calculateMedian(vals);
+        }
+        return [cc, value, vals.length];
+    }).sort((a, b) => b[1] - a[1]);
     
     const grid = document.createElement('div');
     grid.className = 'stats-grid';
     
-    countries.forEach(([countryCode, scoreDiff, count]) => {
+    countries.forEach(([countryCode, value, count]) => {
+        const isRate = metric === 'guessedFirstRate';
+        const numeric = isRate ? value : value;
         const card = document.createElement('div');
-        card.className = `country-stat ${scoreDiff > 0 ? 'positive' : scoreDiff < 0 ? 'negative' : ''}`;
-        
+        card.className = `country-stat ${(!isRate && numeric > 0) ? 'positive' : (!isRate && numeric < 0) ? 'negative' : ''}`;
+
         const codeSpan = document.createElement('span');
         codeSpan.className = 'country-code';
         codeSpan.textContent = countryCodeToFlag(countryCode);
-        codeSpan.title = countryCode; // Show country code on hover
-        
+        codeSpan.title = countryCode;
+
         const infoContainer = document.createElement('div');
         infoContainer.style.display = 'flex';
         infoContainer.style.flexDirection = 'column';
         infoContainer.style.alignItems = 'flex-end';
-        
+
         const scoreSpan = document.createElement('span');
-        scoreSpan.className = `score-diff ${scoreDiff > 0 ? 'positive' : scoreDiff < 0 ? 'negative' : ''}`;
-        scoreSpan.textContent = scoreDiff > 0 ? `+${scoreDiff}` : scoreDiff;
-        
+        scoreSpan.className = `score-diff ${(!isRate && numeric > 0) ? 'positive' : (!isRate && numeric < 0) ? 'negative' : ''}`;
+        if (isRate) {
+            scoreSpan.textContent = `${Math.round(value * 10000) / 100}%`;
+        } else {
+            scoreSpan.textContent = numeric > 0 ? `+${numeric}` : numeric;
+        }
+
         const countSpan = document.createElement('span');
         countSpan.style.fontSize = '12px';
         countSpan.style.color = '#888';
         countSpan.style.marginTop = '4px';
         countSpan.textContent = `${count} locations`;
-        
+
         infoContainer.appendChild(scoreSpan);
         infoContainer.appendChild(countSpan);
-        
+
         card.appendChild(codeSpan);
         card.appendChild(infoContainer);
         grid.appendChild(card);
@@ -567,54 +633,91 @@ function displayPerformanceMap() {
         return;
     }
     
-    // Collect all score diffs by country code
-    const scoreDiffsByCountry = {};
-    
-    rounds.forEach(round => {
-        const cc = round.countryCode;
-        if (!scoreDiffsByCountry[cc]) {
-            scoreDiffsByCountry[cc] = [];
-        }
-        scoreDiffsByCountry[cc].push(round.scoreDiff);
-    });
-    
-    // Calculate medians for each country
-    const countries = [];
-    const medians = [];
-    const locationCounts = [];
-    
-    Object.entries(scoreDiffsByCountry).forEach(([cc, diffs]) => {
-        countries.push(cldrToIso[cc]);
-        medians.push(calculateMedian(diffs));
-        locationCounts.push(diffs.length);
-    });
+    const metric = (document.getElementById('map-metric-select') || { value: 'scoreDiff' }).value;
 
-    medians.push(-5000);
-    medians.push(5000);
-    
-    // Create choropleth data
-    const data = [{
-        type: 'choropleth',
-        locations: countries,
-        z: medians,
-        colorscale: [
+    let zmin;
+    let zmax;
+    let colorscale; 
+    if (metric === 'guessedFirstRate') {
+        zmin = 0;
+        zmax = 1;
+        colorscale = [
+            [0, '#f9f9f9'],
+            [0.5, '#c1f3c0ff'],
+            [1, '#4caf50']
+        ];
+    } else if (metric === 'score') {
+        zmin = 0;
+        zmax = 5000;
+        colorscale = [
+            [0, '#f44336'],      
+            [0.75, '#ffee53ff'],    
+            [0.95, '#88cc8aff'],  
+            [1, '#90f3ebff'],
+        ];
+    } else if (metric === 'distance') {
+    } else {
+        zmin = -5000;
+        zmax = 5000;
+        colorscale = [
             [0, '#f44336'],
             [0.45, '#ffd0c8ff'],
             [0.5, '#f9f9f9'],
             [0.55, '#c1f3c0ff'],
-            [1, '#4caf50'],
-        ],
+            [1, '#4caf50']
+        ];
+    }
+    
+    const valuesByCountry = {};
+
+    rounds.forEach(round => {
+        const cc = round.countryCode;
+        if (!valuesByCountry[cc]) valuesByCountry[cc] = [];
+        if (metric === 'guessedFirstRate') {
+            valuesByCountry[cc].push(round.guessedFirst ? 1 : 0);
+        } else if (metric === 'score') {
+            valuesByCountry[cc].push(round.score);
+        } else if (metric === 'distance') {
+            valuesByCountry[cc].push(round.distance);
+        } else {
+            valuesByCountry[cc].push(round.scoreDiff);
+        }
+    });
+    
+    // Calculate medians for each country
+    const countries = [];
+    const z = [];
+    const locationCounts = [];
+    Object.entries(valuesByCountry).forEach(([cc, vals]) => {
+        countries.push(cldrToIso[cc]);
+        locationCounts.push(vals.length);
+        if (metric === 'guessedFirstRate') {
+            const sum = vals.reduce((a, b) => a + b, 0);
+            z.push(vals.length ? (sum / vals.length) : 0);
+        } else {
+            z.push(calculateMedian(vals));
+        }
+    });
+
+    const isRate = metric === 'guessedFirstRate';
+    const data = [{
+        type: 'choropleth',
+        locations: countries,
+        z: z,
+        colorscale,
         colorbar: {
-            title: 'Median Score Diff'
+            title: isRate ? 'Guessed-first rate' : `Median ${metric}`
         },
+        zmin,
+        zmax,
         hovertext: countries.map((cc, i) => 
-            `${cc}<br>Median: ${medians[i]}<br>Locations: ${locationCounts[i]}`
+            `${cc}<br>Value: ${isRate ? (Math.round(z[i]*10000)/100)+'%' : z[i]}<br>Locations: ${locationCounts[i]}`
         ),
         hoverinfo: 'text',
     }];
     
     const layout = {
-        title: 'Performance by Country (Median Score Difference)',
+        title: `Performance by Country (${isRate ? 'Guessed-first rate' : 'Median ' + metric})`,
         geo: {
             projection: {
                 type: 'natural earth'
@@ -640,21 +743,45 @@ function displayGuessesMap() {
         return;
     }
     
-    // Collect all guesses with their coordinates and scores
+    const metric = (document.getElementById('guesses-metric-select') || { value: 'score' }).value;
+
+    let colorscale = [
+        [0, '#f44336'],      
+        [0.75, '#ffeb3b'],    
+        [0.95, '#4caf50'],
+        [1, '#45e4d6ff'],
+    ];
+    if (metric === 'scoreDiff') {
+        colorscale = [
+            [0, '#f44336'],
+            [0.4, '#ffeb3b'],
+            [0.5, '#4caf50'],
+            [0.8, '#6389dbff'],
+            [1, '#aa6acfff']
+        ];
+    } else if (metric === 'distance') {
+        colorscale = undefined; // TODO
+    }
+
     const lats = [];
     const lons = [];
-    const scores = [];
+    const values = [];
     const hoverTexts = [];
-    
+
     rounds.forEach(round => {
         lats.push(round.panorama.lat);
         lons.push(round.panorama.lng);
-        scores.push(round.score);
-        hoverTexts.push(`Score: ${round.score}<br>Δ Score: ${round.scoreDiff > 0 ? '+' : ''}${round.scoreDiff}<br>Country: ${round.countryCode}<br>${new Date(stats[currentMode].games[round.game]?.startTime).toLocaleDateString()}`);
+        let val = round.score;
+        if (metric === 'scoreDiff') 
+            val = round.scoreDiff;
+        else if (metric === 'distance') 
+            val = round.distance;
+        values.push(val);
+        hoverTexts.push(`${metric}: ${val}<br>Score: ${round.score}<br>Δ Score: ${round.scoreDiff > 0 ? '+' : ''}${round.scoreDiff}<br>Country: ${round.countryCode}<br>${new Date(stats[currentMode].games[round.game]?.startTime).toLocaleDateString()}`);
     });
 
-    scores.push(0);
-    scores.push(5000);
+    values.push(0);
+    values.push(5000);
     
     // Create scatter map data
     const data = [{
@@ -664,14 +791,10 @@ function displayGuessesMap() {
         mode: 'markers',
         marker: {
             size: 6,
-            color: scores,
-            colorscale: [
-                [0, '#f44336'],      
-                [0.75, '#ffeb3b'],    
-                [1, '#4caf50'],
-            ],
+            color: values,
+            colorscale,
             colorbar: {
-                title: 'Score'
+                title: metric === 'score' ? 'Score' : metric === 'scoreDiff' ? 'Score Diff' : 'Distance'
             },
             showscale: true,
         },
@@ -733,20 +856,36 @@ function displayBoxplot() {
         return;
     }
     
-    // Collect all score diffs by country
-    const scoreDiffsByCountry = {};
-    
+    const metric = (document.getElementById('boxplot-metric-select') || { value: 'scoreDiff' }).value;
+
+    let ymin;
+    let ymax;
+    if (metric === 'score') {
+        ymin = 0;
+        ymax = 5000;
+    } else if (metric === 'distance') {
+    } else {
+        ymin = -5000;
+        ymax = 5000;
+    }
+    const addToRange = (ymax - ymin) * 0.05;
+
+    const valuesByCountry = {};
     rounds.forEach(round => {
         const cc = round.countryCode;
-        if (!scoreDiffsByCountry[cc]) {
-            scoreDiffsByCountry[cc] = [];
-        }
-        scoreDiffsByCountry[cc].push(round.scoreDiff);
+        if (!valuesByCountry[cc]) 
+            valuesByCountry[cc] = [];
+
+        if (metric === 'score') 
+            valuesByCountry[cc].push(round.score);
+        else if (metric === 'distance') 
+            valuesByCountry[cc].push(round.distance);
+        else 
+            valuesByCountry[cc].push(round.scoreDiff);
     });
-    
-    // Calculate medians and sort countries by median
-    const countriesWithMedian = Object.keys(scoreDiffsByCountry).map(cc => {
-        const values = scoreDiffsByCountry[cc];
+
+    const countriesWithMedian = Object.keys(valuesByCountry).map(cc => {
+        const values = valuesByCountry[cc];
         const sorted = [...values].sort((a, b) => a - b);
         const mid = Math.floor(sorted.length / 2);
         const median = sorted.length % 2 === 0 
@@ -788,7 +927,7 @@ function displayBoxplot() {
         title: 'Score Difference Distribution by Country (Sorted by Median)',
         yaxis: {
             title: 'Score Difference',
-            range: [-5050, 5050],
+            range: [ymin - addToRange, ymax + addToRange],
             dtick: 1000,
             zeroline: true,
             zerolinecolor: '#666',
