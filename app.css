@@ -156,3 +156,123 @@ h1 {
     font-size: 12px;
     padding: 4px 6px;
 }
+
+/* Menu bar styling */
+.menu-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: stretch;
+    margin: 12px 0 16px 0;
+}
+
+.profile-chip {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    min-width: 220px;
+}
+
+.profile-chip .flag {
+    font-size: 20px;
+    font-family: 'Twemoji Country Flags', 'Apple Color Emoji', sans-serif;
+}
+
+.profile-chip .name {
+    font-weight: 600;
+    color: #333;
+}
+
+.profile-chip .level {
+    font-size: 12px;
+    color: #666;
+}
+
+.mode-cards {
+    display: flex;
+    flex: 1;
+    gap: 10px;
+    min-width: 320px;
+}
+
+.mode-card {
+    flex: 1;
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    cursor: pointer;
+    transition: transform 0.08s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+    min-width: 200px;
+    min-height: 140px;
+}
+
+.mode-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+}
+
+.mode-card.active {
+    border-color: #4caf50;
+    box-shadow: 0 3px 10px rgba(76,175,80,0.2);
+    transform: translateY(-1px);
+    cursor: initial;
+}
+
+.mode-card .card-title {
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.mode-card .card-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: #444;
+}
+
+.mode-card .controls {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.pill-toggle {
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    padding: 2px;
+    display: inline-flex;
+    gap: 2px;
+    background: #f5f5f5;
+}
+
+.pill-toggle button {
+    border: none;
+    background: transparent;
+    padding: 4px 8px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.pill-toggle button.active {
+    background: white;
+    border: 1px solid #4caf50;
+    color: #2f7a34;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.mode-card select {
+    font-size: 12px;
+    padding: 4px 6px;
+    width: 100%;
+    border-radius: 8px;
+    border-color: #aaa;
+}

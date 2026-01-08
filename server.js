@@ -18,6 +18,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
+// Mock profile and stats overview endpoints
+app.get('/api/mock/profile', (req, res) => {
+    // Some mock profile data
+});
+
+app.get('/api/mock/overview', (req, res) => {
+    // Some mock stats overview data
+});
+
 
 // Proxy endpoint for fetching game data
 app.get('/api/duels/:token', async (req, res) => {

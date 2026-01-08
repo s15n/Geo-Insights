@@ -1,8 +1,8 @@
 const BASE_URL = "http://localhost:3000"
 
 // TODO: remove hardcoding, offer selection after login
-const ownPlayerId = "";
-const teamMateId = "";
+let ownPlayerId = "";
+let teamMateId = "";
 
 // Get ncfa cookie from localStorage
 function getNcfaCookie() {
@@ -29,6 +29,64 @@ function isBackupEnabled() {
 // Current mode state
 let currentMode = 'moving';
 
+let game_tokens = [];
+let stats = null;
+
+let countryData = {}; // Maps CLDR country code to {name, iso3166Alpha3}
+let profileSummary = null;
+let overviewStats = null;
+let selectedCategory = 'teamDuels';
+let selectedTeamId = null;
+let duelsScope = 'ranked'; // ranked | all
+
+function persistValue(key, value) {
+    try {
+        localStorage.setItem(key, JSON.stringify(value));
+    } catch (e) {
+        console.warn('Persist failed', key, e);
+    }
+}
+
+function loadPersistedValue(key) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (raw === null) return undefined;
+        return JSON.parse(raw);
+    } catch (e) {
+        return undefined;
+    }
+}
+
+const LS_KEYS = {
+    ownPlayerId: 'ls_ownPlayerId',
+    teamMateId: 'ls_teamMateId',
+    selectedCategory: 'ls_selectedCategory',
+    selectedTeamId: 'ls_selectedTeamId',
+    duelsScope: 'ls_duelsScope',
+    currentMode: 'ls_currentMode',
+    metric_map: 'ls_metric_map',
+    metric_guesses: 'ls_metric_guesses',
+    metric_boxplot: 'ls_metric_boxplot',
+    metric_countrylist: 'ls_metric_countrylist'
+};
+
+function loadPersistedState() {
+    const storedOwn = loadPersistedValue(LS_KEYS.ownPlayerId);
+    if (storedOwn) ownPlayerId = storedOwn;
+    const storedMate = loadPersistedValue(LS_KEYS.teamMateId);
+    if (storedMate) teamMateId = storedMate;
+    const storedCat = loadPersistedValue(LS_KEYS.selectedCategory);
+    if (storedCat) selectedCategory = storedCat;
+    const storedTeam = loadPersistedValue(LS_KEYS.selectedTeamId);
+    if (storedTeam) selectedTeamId = storedTeam;
+    const storedDuelsScope = loadPersistedValue(LS_KEYS.duelsScope);
+    if (storedDuelsScope) duelsScope = storedDuelsScope;
+    const storedMode = loadPersistedValue(LS_KEYS.currentMode);
+    if (storedMode) currentMode = storedMode;
+}
+
+loadPersistedState();
+
 // Logout functionality and mode toggle
 document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logoutBtn');
@@ -42,14 +100,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Mode toggle functionality
     const modeOptions = document.querySelectorAll('.mode-option');
     modeOptions.forEach(option => {
-        option.addEventListener('click', () => {
-            // Remove active class from all options
-            modeOptions.forEach(opt => opt.classList.remove('active'));
-            // Add active class to clicked option
+        if (option.dataset.mode === currentMode) {
             option.classList.add('active');
-            // Update current mode
+        }
+        option.addEventListener('click', () => {
+            modeOptions.forEach(opt => opt.classList.remove('active'));
+            option.classList.add('active');
             currentMode = option.dataset.mode;
-            // Refresh displays
+            persistValue(LS_KEYS.currentMode, currentMode);
             refreshDisplays();
         });
     });
@@ -77,6 +135,14 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleContainer.appendChild(label);
     document.body.appendChild(toggleContainer);
     // Create metric selectors for each statistic
+    function metricKeyForId(id) {
+        if (id === 'map-metric-select') return LS_KEYS.metric_map;
+        if (id === 'guesses-metric-select') return LS_KEYS.metric_guesses;
+        if (id === 'boxplot-metric-select') return LS_KEYS.metric_boxplot;
+        if (id === 'countrylist-metric-select') return LS_KEYS.metric_countrylist;
+        return null;
+    }
+
     function createMetricSelector(parentSelector, id, includeGuessedFirst, defaultSelected = 'scoreDiff') {
         const parent = document.querySelector(parentSelector);
         if (!parent) return;
@@ -99,9 +165,14 @@ document.addEventListener('DOMContentLoaded', () => {
             select.appendChild(new Option('Guessed-first rate', 'guessedFirstRate'));
         }
 
-        select.value = defaultSelected;
+        const persistedKey = metricKeyForId(id);
+        const persistedVal = persistedKey ? loadPersistedValue(persistedKey) : undefined;
+        select.value = persistedVal || defaultSelected;
 
-        select.addEventListener('change', () => refreshDisplays());
+        select.addEventListener('change', () => {
+            if (persistedKey) persistValue(persistedKey, select.value);
+            refreshDisplays();
+        });
 
         container.appendChild(label);
         container.appendChild(select);
@@ -498,12 +569,6 @@ function getGameMode(game) {
 const loadSavedTokens = true;
 const loadSavedStats = true;
 
-
-let game_tokens = [];
-let stats = null;
-
-let countryData = {}; // Maps CLDR country code to {name, iso3166Alpha3}
-
 (async () => {
     if (loadSavedTokens) {
         game_tokens = await fetch('tokens.json').then(res => res.json());
@@ -515,6 +580,9 @@ let countryData = {}; // Maps CLDR country code to {name, iso3166Alpha3}
         console.log('Game tokens fetched:', game_tokens);
     }
 
+    countryData = await fetch('countries.json').then(res => res.json());
+    await loadMenuData();
+
     if (loadSavedStats) {
         stats = await fetch('stats.json').then(res => res.json());
         console.log('Data loaded from save:', stats);
@@ -522,8 +590,6 @@ let countryData = {}; // Maps CLDR country code to {name, iso3166Alpha3}
         stats = await processGameTokens(game_tokens);
         console.log('Data loaded:', stats);
     }
-
-    countryData = await fetch('countries.json').then(res => res.json());
     
     refreshDisplays();
 })();
@@ -555,6 +621,199 @@ function calculateMedian(values) {
     return sorted.length % 2 === 0 
         ? Math.floor((sorted[mid - 1] + sorted[mid]) / 2)
         : sorted[mid];
+}
+
+async function loadMenuData() {
+    try {
+        const [profile, overview] = await Promise.all([
+            fetch('/api/mock/profile').then(r => r.json()),
+            fetch('/api/mock/overview').then(r => r.json())
+        ]);
+        profileSummary = profile;
+        overviewStats = overview;
+        if (profileSummary?.userId) {
+            ownPlayerId = profileSummary.userId;
+            persistValue(LS_KEYS.ownPlayerId, ownPlayerId);
+        }
+
+        selectedTeamId = overviewStats?.teamDuels?.defaultTeamId || overviewStats?.teamDuels?.teams?.[0]?.id || selectedTeamId;
+        if (selectedTeamId) persistValue(LS_KEYS.selectedTeamId, selectedTeamId);
+        if (!teamMateId && selectedTeamId) {
+            const t = overviewStats?.teamDuels?.teams?.find(team => team.id === selectedTeamId);
+            if (t?.mateId) {
+                teamMateId = t.mateId;
+                persistValue(LS_KEYS.teamMateId, teamMateId);
+            }
+        }
+        renderMenuBar();
+    } catch (e) {
+        console.warn('Failed to load menu data', e);
+    }
+}
+
+function formatWinRate(rate) {
+    if (rate === null || rate === undefined || Number.isNaN(rate)) return '—';
+    return `${Math.round(rate * 1000) / 10}%`;
+}
+
+function renderMenuBar() {
+    const profileEl = document.getElementById('profileSummary');
+    const cardsEl = document.getElementById('modeCards');
+    if (!profileEl || !cardsEl) return;
+
+    // Profile chip
+    if (profileSummary) {
+        const flag = countryCodeToFlag(profileSummary.countryCode || '');
+        profileEl.innerHTML = `
+            <span class="flag">${flag}</span>
+            <div>
+                <div class="name">${profileSummary.name || ''}</div>
+                <div class="level">Level ${profileSummary.level || '—'}</div>
+            </div>
+        `;
+    } else {
+        profileEl.textContent = 'Loading profile...';
+    }
+
+    cardsEl.innerHTML = '';
+    const cardData = [];
+    if (overviewStats?.duels) {
+        const d = overviewStats.duels;
+        cardData.push({
+            id: 'duels',
+            title: 'Duels',
+            rows: [
+                ['Division', d.division || '—'],
+                ['Rating', d.rating != null ? d.rating : '—'],
+                ['Best', d.bestRating != null ? d.bestRating : '—'],
+                ['Games', d.games != null ? d.games : '—'],
+                ['Win rate', formatWinRate(d.winRate)]
+            ],
+            controls: (card) => {
+                const wrap = document.createElement('div');
+                wrap.className = 'controls';
+                if (selectedCategory !== 'duels') {
+                    wrap.style.display = 'none';
+                }
+
+                const toggle = document.createElement('div');
+                toggle.className = 'pill-toggle';
+                const rankedBtn = document.createElement('button');
+                rankedBtn.textContent = 'Ranked';
+                rankedBtn.className = duelsScope === 'ranked' ? 'active' : '';
+                rankedBtn.onclick = (e) => { e.stopPropagation(); duelsScope = 'ranked'; persistValue(LS_KEYS.duelsScope, duelsScope); renderMenuBar(); };
+                const allBtn = document.createElement('button');
+                allBtn.textContent = 'All';
+                allBtn.className = duelsScope === 'all' ? 'active' : '';
+                allBtn.onclick = (e) => { e.stopPropagation(); duelsScope = 'all'; persistValue(LS_KEYS.duelsScope, duelsScope); renderMenuBar(); };
+                toggle.appendChild(rankedBtn);
+                toggle.appendChild(allBtn);
+
+                wrap.appendChild(toggle);
+                return wrap;
+            }
+        });
+    }
+
+    if (overviewStats?.teamDuels) {
+        const t = overviewStats.teamDuels;
+        const selectedTeam = t.teams?.find(team => team.id === selectedTeamId) || t.teams?.[0];
+        cardData.push({
+            id: 'teamDuels',
+            title: 'Team Duels',
+            rows: [
+                ['Division', selectedTeam?.division || '—'],
+                ['Rating', selectedTeam?.rating != null ? selectedTeam.rating : '—'],
+                ['Best', selectedTeam?.bestRating != null ? selectedTeam.bestRating : '—'],
+                ['Games', selectedTeam?.games != null ? selectedTeam.games : '—'],
+                ['Win rate', formatWinRate(selectedTeam?.winRate)]
+            ],
+            controls: () => {
+                const wrap = document.createElement('div');
+                wrap.className = 'controls';
+                if (selectedCategory !== 'teamDuels') {
+                    wrap.style.display = 'none';
+                }
+
+                const select = document.createElement('select');
+                (t.teams || []).forEach(team => {
+                    const opt = new Option(`${team.name} (${team.division || '—'})`, team.id);
+                    opt.addEventListener('click', (e) => e.stopPropagation());
+
+                    if (team.id === selectedTeamId) 
+                        opt.selected = true;
+                    select.appendChild(opt);
+                });
+                select.addEventListener('click', (e) => e.stopPropagation());
+                select.onchange = async (e) => {
+                    selectedTeamId = e.target.value;
+                    persistValue(LS_KEYS.selectedTeamId, selectedTeamId);
+                    const selected = (t.teams || []).find(team => team.id === selectedTeamId);
+                    if (selected && selected.mateId) {
+                        teamMateId = selected.mateId;
+                        persistValue(LS_KEYS.teamMateId, teamMateId);
+                        statsContentLoading('Recomputing for selected team...');
+                        stats = await processGameTokens(game_tokens);
+                    }
+                    renderMenuBar();
+                    refreshDisplays();
+                };
+
+                wrap.appendChild(select);
+                return wrap;
+            }
+        });
+    }
+
+    if (overviewStats?.singleplayer) {
+        const s = overviewStats.singleplayer;
+        cardData.push({
+            id: 'singleplayer',
+            title: 'Singleplayer',
+            rows: [
+                ['Games', s.games != null ? s.games : '—'],
+                ['Avg score', s.averageScore != null ? s.averageScore : '—']
+            ]
+        });
+    }
+
+    cardData.forEach(card => {
+        const el = document.createElement('div');
+        el.className = `mode-card ${selectedCategory === card.id ? 'active' : ''}`;
+        el.onclick = async () => {
+            selectedCategory = card.id;
+            persistValue(LS_KEYS.selectedCategory, selectedCategory);
+            renderMenuBar();
+            if (card.id === 'teamDuels') {
+                // Already handled via dropdown change if needed
+            }
+        };
+        const title = document.createElement('div');
+        title.className = 'card-title';
+        title.textContent = card.title;
+        el.appendChild(title);
+
+        (card.rows || []).forEach(([label, value]) => {
+            const row = document.createElement('div');
+            row.className = 'card-row';
+            row.innerHTML = `<span>${label}</span><span>${value}</span>`;
+            el.appendChild(row);
+        });
+
+        if (card.controls) {
+            const ctrl = card.controls(card);
+            el.appendChild(ctrl);
+        }
+
+        cardsEl.appendChild(el);
+    });
+}
+
+function statsContentLoading(msg) {
+    const statsContent = document.getElementById('statsContent');
+    if (statsContent) {
+        statsContent.textContent = msg;
+    }
 }
 
 const scoreColorscale = [
