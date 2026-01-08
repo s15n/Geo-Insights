@@ -118,10 +118,6 @@ h1 {
     background: #45a049;
 }
 
-g.xtick text {
-    font-family: 'Twemoji Country Flags', 'Apple Color Emoji', sans-serif !important;
-}
-
 /* Backup toggle styling moved from inline styles */
 .backup-toggle {
     position: fixed;

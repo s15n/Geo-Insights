@@ -1,253 +1,669 @@
 {
-    "cldrToIso3166Alpha3": {
-        "ad": "AND",
-        "ae": "ARE",
-        "af": "AFG",
-        "ag": "ATG",
-        "ai": "AIA",
-        "al": "ALB",
-        "am": "ARM",
-        "ao": "AGO",
-        "aq": "ATA",
-        "ar": "ARG",
-        "as": "ASM",
-        "at": "AUT",
-        "au": "AUS",
-        "aw": "ABW",
-        "ax": "ALA",
-        "az": "AZE",
-        "ba": "BIH",
-        "bb": "BRB",
-        "bd": "BGD",
-        "be": "BEL",
-        "bf": "BFA",
-        "bg": "BGR",
-        "bh": "BHR",
-        "bi": "BDI",
-        "bj": "BEN",
-        "bl": "BLM",
-        "bm": "BMU",
-        "bn": "BRN",
-        "bo": "BOL",
-        "bq": "BES",
-        "br": "BRA",
-        "bs": "BHS",
-        "bt": "BTN",
-        "bv": "BVT",
-        "bw": "BWA",
-        "by": "BLR",
-        "bz": "BLZ",
-        "ca": "CAN",
-        "cc": "CCK",
-        "cd": "COD",
-        "cf": "CAF",
-        "cg": "COG",
-        "ch": "CHE",
-        "ci": "CIV",
-        "ck": "COK",
-        "cl": "CHL",
-        "cm": "CMR",
-        "cn": "CHN",
-        "co": "COL",
-        "cr": "CRI",
-        "cu": "CUB",
-        "cv": "CPV",
-        "cw": "CUW",
-        "cx": "CXR",
-        "cy": "CYP",
-        "cz": "CZE",
-        "de": "DEU",
-        "dj": "DJI",
-        "dk": "DNK",
-        "dm": "DMA",
-        "do": "DOM",
-        "dz": "DZA",
-        "ec": "ECU",
-        "ee": "EST",
-        "eg": "EGY",
-        "eh": "ESH",
-        "er": "ERI",
-        "es": "ESP",
-        "et": "ETH",
-        "fi": "FIN",
-        "fj": "FJI",
-        "fk": "FLK",
-        "fm": "FSM",
-        "fo": "FRO",
-        "fr": "FRA",
-        "ga": "GAB",
-        "gb": "GBR",
-        "gd": "GRD",
-        "ge": "GEO",
-        "gf": "GUF",
-        "gg": "GGY",
-        "gh": "GHA",
-        "gi": "GIB",
-        "gl": "GRL",
-        "gm": "GMB",
-        "gn": "GIN",
-        "gp": "GLP",
-        "gq": "GNQ",
-        "gr": "GRC",
-        "gs": "SGS",
-        "gt": "GTM",
-        "gu": "GUM",
-        "gw": "GNB",
-        "gy": "GUY",
-        "hk": "HKG",
-        "hm": "HMD",
-        "hn": "HND",
-        "hr": "HRV",
-        "ht": "HTI",
-        "hu": "HUN",
-        "id": "IDN",
-        "ie": "IRL",
-        "il": "ISR",
-        "im": "IMN",
-        "in": "IND",
-        "io": "IOT",
-        "iq": "IRQ",
-        "ir": "IRN",
-        "is": "ISL",
-        "it": "ITA",
-        "je": "JEY",
-        "jm": "JAM",
-        "jo": "JOR",
-        "jp": "JPN",
-        "ke": "KEN",
-        "kg": "KGZ",
-        "kh": "KHM",
-        "ki": "KIR",
-        "km": "COM",
-        "kn": "KNA",
-        "kp": "PRK",
-        "kr": "KOR",
-        "kw": "KWT",
-        "ky": "CYM",
-        "kz": "KAZ",
-        "la": "LAO",
-        "lb": "LBN",
-        "lc": "LCA",
-        "li": "LIE",
-        "lk": "LKA",
-        "lr": "LBR",
-        "ls": "LSO",
-        "lt": "LTU",
-        "lu": "LUX",
-        "lv": "LVA",
-        "ly": "LBY",
-        "ma": "MAR",
-        "mc": "MCO",
-        "md": "MDA",
-        "me": "MNE",
-        "mf": "MAF",
-        "mg": "MDG",
-        "mh": "MHL",
-        "mk": "MKD",
-        "ml": "MLI",
-        "mm": "MMR",
-        "mn": "MNG",
-        "mo": "MAC",
-        "mp": "MNP",
-        "mq": "MTQ",
-        "mr": "MRT",
-        "ms": "MSR",
-        "mt": "MLT",
-        "mu": "MUS",
-        "mv": "MDV",
-        "mw": "MWI",
-        "mx": "MEX",
-        "my": "MYS",
-        "mz": "MOZ",
-        "na": "NAM",
-        "nc": "NCL",
-        "ne": "NER",
-        "nf": "NFK",
-        "ng": "NGA",
-        "ni": "NIC",
-        "nl": "NLD",
-        "no": "NOR",
-        "np": "NPL",
-        "nr": "NRU",
-        "nu": "NIU",
-        "nz": "NZL",
-        "om": "OMN",
-        "pa": "PAN",
-        "pe": "PER",
-        "pf": "PYF",
-        "pg": "PNG",
-        "ph": "PHL",
-        "pk": "PAK",
-        "pl": "POL",
-        "pm": "SPM",
-        "pn": "PCN",
-        "pr": "PRI",
-        "ps": "PSE",
-        "pt": "PRT",
-        "pw": "PLW",
-        "py": "PRY",
-        "qa": "QAT",
-        "re": "REU",
-        "ro": "ROU",
-        "rs": "SRB",
-        "ru": "RUS",
-        "rw": "RWA",
-        "sa": "SAU",
-        "sb": "SLB",
-        "sc": "SYC",
-        "sd": "SDN",
-        "se": "SWE",
-        "sg": "SGP",
-        "sh": "SHN",
-        "si": "SVN",
-        "sj": "SJM",
-        "sk": "SVK",
-        "sl": "SLE",
-        "sm": "SMR",
-        "sn": "SEN",
-        "so": "SOM",
-        "sr": "SUR",
-        "ss": "SSD",
-        "st": "STP",
-        "sv": "SLV",
-        "sx": "SXM",
-        "sy": "SYR",
-        "sz": "SWZ",
-        "tc": "TCA",
-        "td": "TCD",
-        "tf": "ATF",
-        "tg": "TGO",
-        "th": "THA",
-        "tj": "TJK",
-        "tk": "TKL",
-        "tl": "TLS",
-        "tm": "TKM",
-        "tn": "TUN",
-        "to": "TON",
-        "tr": "TUR",
-        "tt": "TTO",
-        "tv": "TUV",
-        "tw": "TWN",
-        "tz": "TZA",
-        "ua": "UKR",
-        "ug": "UGA",
-        "um": "UMI",
-        "us": "USA",
-        "uy": "URY",
-        "uz": "UZB",
-        "va": "VAT",
-        "vc": "VCT",
-        "ve": "VEN",
-        "vg": "VGB",
-        "vi": "VIR",
-        "vn": "VNM",
-        "vu": "VUT",
-        "wf": "WLF",
-        "ws": "WSM",
-        "ye": "YEM",
-        "yt": "MYT",
-        "za": "ZAF",
-        "zm": "ZMB",
-        "zw": "ZWE"
+    "ad": {
+        "name": "Andorra",
+        "iso3166Alpha3": "AND"
+    },
+    "ae": {
+        "name": "United Arab Emirates",
+        "iso3166Alpha3": "ARE"
+    },
+    "al": {
+        "name": "Albania",
+        "iso3166Alpha3": "ALB"
+    },
+    "am": {
+        "name": "Armenia",
+        "iso3166Alpha3": "ARM",
+        "hasStreetView": false
+    },
+    "aq": {
+        "name": "Antarctica",
+        "iso3166Alpha3": "ATA"
+    },
+    "ar": {
+        "name": "Argentina",
+        "iso3166Alpha3": "ARG"
+    },
+    "as": {
+        "name": "American Samoa",
+        "iso3166Alpha3": "ASM"
+    },
+    "at": {
+        "name": "Austria",
+        "iso3166Alpha3": "AUT"
+    },
+    "au": {
+        "name": "Australia",
+        "iso3166Alpha3": "AUS"
+    },
+    "ax": {
+        "name": "Åland Islands",
+        "iso3166Alpha3": "ALA"
+    },
+    "ba": {
+        "name": "Bosnia and Herzegovina",
+        "iso3166Alpha3": "BIH"
+    },
+    "bd": {
+        "name": "Bangladesh",
+        "iso3166Alpha3": "BGD"
+    },
+    "be": {
+        "name": "Belgium",
+        "iso3166Alpha3": "BEL"
+    },
+    "bg": {
+        "name": "Bulgaria",
+        "iso3166Alpha3": "BGR"
+    },
+    "bh": {
+        "name": "Bahrain",
+        "iso3166Alpha3": "BHR",
+        "hasStreetView": false
+    },
+    "bm": {
+        "name": "Bermuda",
+        "iso3166Alpha3": "BMU"
+    },
+    "bn": {
+        "name": "Brunei Darussalam",
+        "iso3166Alpha3": "BRN",
+        "hasStreetView": false
+    },
+    "bo": {
+        "name": "Bolivia",
+        "iso3166Alpha3": "BOL"
+    },
+    "br": {
+        "name": "Brazil",
+        "iso3166Alpha3": "BRA"
+    },
+    "bt": {
+        "name": "Bhutan",
+        "iso3166Alpha3": "BTN"
+    },
+    "bw": {
+        "name": "Botswana",
+        "iso3166Alpha3": "BWA"
+    },
+    "by": {
+        "name": "Belarus",
+        "iso3166Alpha3": "BLR"
+    },
+    "ca": {
+        "name": "Canada",
+        "iso3166Alpha3": "CAN"
+    },
+    "cc": {
+        "name": "Cocos (Keeling) Islands",
+        "iso3166Alpha3": "CCK"
+    },
+    "ch": {
+        "name": "Switzerland",
+        "iso3166Alpha3": "CHE"
+    },
+    "ci": {
+        "name": "Côte d'Ivoire",
+        "iso3166Alpha3": "CIV",
+        "hasStreetView": false
+    },
+    "cl": {
+        "name": "Chile",
+        "iso3166Alpha3": "CHL"
+    },
+    "cn": {
+        "name": "China",
+        "iso3166Alpha3": "CHN",
+        "veryLimitedStreetView": true
+    },
+    "co": {
+        "name": "Colombia",
+        "iso3166Alpha3": "COL"
+    },
+    "cr": {
+        "name": "Costa Rica",
+        "iso3166Alpha3": "CRI"
+    },
+    "cv": {
+        "name": "Cabo Verde",
+        "iso3166Alpha3": "CPV",
+        "hasStreetView": false
+    },
+    "cw": {
+        "name": "Curaçao",
+        "iso3166Alpha3": "CUW"
+    },
+    "cx": {
+        "name": "Christmas Island",
+        "iso3166Alpha3": "CXR"
+    },
+    "cy": {
+        "name": "Cyprus",
+        "iso3166Alpha3": "CYP"
+    },
+    "cz": {
+        "name": "Czechia",
+        "iso3166Alpha3": "CZE"
+    },
+    "de": {
+        "name": "Germany",
+        "iso3166Alpha3": "DEU"
+    },
+    "dg": {
+        "name": "Diego Garcia",
+        "iso3166Alpha3": "DGA",
+        "hasStreetView": false
+    },
+    "dk": {
+        "name": "Denmark",
+        "iso3166Alpha3": "DNK"
+    },
+    "do": {
+        "name": "Dominican Republic",
+        "iso3166Alpha3": "DOM"
+    },
+    "ec": {
+        "name": "Ecuador",
+        "iso3166Alpha3": "ECU"
+    },
+    "ee": {
+        "name": "Estonia",
+        "iso3166Alpha3": "EST"
+    },
+    "eg": {
+        "name": "Egypt",
+        "iso3166Alpha3": "EGY",
+        "veryLimitedStreetView": true
+    },
+    "es": {
+        "name": "Spain",
+        "iso3166Alpha3": "ESP"
+    },
+    "et": {
+        "name": "Ethiopia",
+        "iso3166Alpha3": "ETH",
+        "hasStreetView": false
+    },
+    "fi": {
+        "name": "Finland",
+        "iso3166Alpha3": "FIN"
+    },
+    "fj": {
+        "name": "Fiji",
+        "iso3166Alpha3": "FJI",
+        "hasStreetView": false
+    },
+    "fk": {
+        "name": "Falkland Islands",
+        "iso3166Alpha3": "FLK"
+    },
+    "fo": {
+        "name": "Faroe Islands",
+        "iso3166Alpha3": "FRO"
+    },
+    "fr": {
+        "name": "France",
+        "iso3166Alpha3": "FRA"
+    },
+    "gb": {
+        "name": "United Kingdom",
+        "iso3166Alpha3": "GBR"
+    },
+    "ge": {
+        "name": "Georgia",
+        "iso3166Alpha3": "GEO",
+        "hasStreetView": false
+    },
+    "gg": {
+        "name": "Guernsey",
+        "iso3166Alpha3": "GGY",
+        "hasStreetView": false
+    },
+    "gh": {
+        "name": "Ghana",
+        "iso3166Alpha3": "GHA"
+    },
+    "gi": {
+        "name": "Gibraltar",
+        "iso3166Alpha3": "GIB"
+    },
+    "gl": {
+        "name": "Greenland",
+        "iso3166Alpha3": "GRL"
+    },
+    "gm": {
+        "name": "Gambia",
+        "iso3166Alpha3": "GMB",
+        "veryLimitedStreetView": true
+    },
+    "gr": {
+        "name": "Greece",
+        "iso3166Alpha3": "GRC"
+    },
+    "gs": {
+        "name": "South Georgia and the South Sandwich Islands",
+        "iso3166Alpha3": "SGS"
+    },
+    "gt": {
+        "name": "Guatemala",
+        "iso3166Alpha3": "GTM"
+    },
+    "gu": {
+        "name": "Guam",
+        "iso3166Alpha3": "GUM"
+    },
+    "gy": {
+        "name": "Guyana",
+        "iso3166Alpha3": "GUY",
+        "veryLimitedStreetView": true
+    },
+    "hk": {
+        "name": "Hong Kong",
+        "iso3166Alpha3": "HKG"
+    },
+    "hr": {
+        "name": "Croatia",
+        "iso3166Alpha3": "HRV"
+    },
+    "hu": {
+        "name": "Hungary",
+        "iso3166Alpha3": "HUN"
+    },
+    "id": {
+        "name": "Indonesia",
+        "iso3166Alpha3": "IDN"
+    },
+    "ie": {
+        "name": "Ireland",
+        "iso3166Alpha3": "IRL"
+    },
+    "il": {
+        "name": "Israel",
+        "iso3166Alpha3": "ISR"
+    },
+    "im": {
+        "name": "Isle of Man",
+        "iso3166Alpha3": "IMN"
+    },
+    "in": {
+        "name": "India",
+        "iso3166Alpha3": "IND"
+    },
+    "io": {
+        "name": "British Indian Ocean Territory",
+        "iso3166Alpha3": "IOT"
+    },
+    "iq": {
+        "name": "Iraq",
+        "iso3166Alpha3": "IRQ",
+        "veryLimitedStreetView": true
+    },
+    "is": {
+        "name": "Iceland",
+        "iso3166Alpha3": "ISL"
+    },
+    "it": {
+        "name": "Italy",
+        "iso3166Alpha3": "ITA"
+    },
+    "je": {
+        "name": "Jersey",
+        "iso3166Alpha3": "JEY"
+    },
+    "jo": {
+        "name": "Jordan",
+        "iso3166Alpha3": "JOR"
+    },
+    "jp": {
+        "name": "Japan",
+        "iso3166Alpha3": "JPN"
+    },
+    "ke": {
+        "name": "Kenya",
+        "iso3166Alpha3": "KEN"
+    },
+    "kg": {
+        "name": "Kyrgyzstan",
+        "iso3166Alpha3": "KGZ"
+    },
+    "kh": {
+        "name": "Cambodia",
+        "iso3166Alpha3": "KHM"
+    },
+    "kr": {
+        "name": "South Korea",
+        "iso3166Alpha3": "KOR"
+    },
+    "kw": {
+        "name": "Kuwait",
+        "iso3166Alpha3": "KWT",
+        "hasStreetView": false
+    },
+    "kz": {
+        "name": "Kazakhstan",
+        "iso3166Alpha3": "KAZ"
+    },
+    "la": {
+        "name": "Laos",
+        "iso3166Alpha3": "LAO"
+    },
+    "lb": {
+        "name": "Lebanon",
+        "iso3166Alpha3": "LBN"
+    },
+    "li": {
+        "name": "Liechtenstein",
+        "iso3166Alpha3": "LIE"
+    },
+    "lk": {
+        "name": "Sri Lanka",
+        "iso3166Alpha3": "LKA"
+    },
+    "ls": {
+        "name": "Lesotho",
+        "iso3166Alpha3": "LSO"
+    },
+    "lt": {
+        "name": "Lithuania",
+        "iso3166Alpha3": "LTU"
+    },
+    "lu": {
+        "name": "Luxembourg",
+        "iso3166Alpha3": "LUX"
+    },
+    "lv": {
+        "name": "Latvia",
+        "iso3166Alpha3": "LVA"
+    },
+    "ma": {
+        "name": "Morocco",
+        "iso3166Alpha3": "MAR",
+        "hasStreetView": false
+    },
+    "mc": {
+        "name": "Monaco",
+        "iso3166Alpha3": "MCO"
+    },
+    "md": {
+        "name": "Moldova",
+        "iso3166Alpha3": "MDA",
+        "hasStreetView": false
+    },
+    "me": {
+        "name": "Montenegro",
+        "iso3166Alpha3": "MNE"
+    },
+    "mg": {
+        "name": "Madagascar",
+        "iso3166Alpha3": "MDG"
+    },
+    "mk": {
+        "name": "North Macedonia",
+        "iso3166Alpha3": "MKD"
+    },
+    "ml": {
+        "name": "Mali",
+        "iso3166Alpha3": "MLI",
+        "veryLimitedStreetView": true
+    },
+    "mn": {
+        "name": "Mongolia",
+        "iso3166Alpha3": "MNG"
+    },
+    "mo": {
+        "name": "Macao",
+        "iso3166Alpha3": "MAC"
+    },
+    "mp": {
+        "name": "Northern Mariana Islands",
+        "iso3166Alpha3": "MNP"
+    },
+    "mq": {
+        "name": "Martinique",
+        "iso3166Alpha3": "MTQ",
+        "veryLimitedStreetView": true
+    },
+    "mt": {
+        "name": "Malta",
+        "iso3166Alpha3": "MLT"
+    },
+    "mu": {
+        "name": "Mauritius",
+        "iso3166Alpha3": "MUS",
+        "hasStreetView": false
+    },
+    "mx": {
+        "name": "Mexico",
+        "iso3166Alpha3": "MEX"
+    },
+    "my": {
+        "name": "Malaysia",
+        "iso3166Alpha3": "MYS"
+    },
+    "na": {
+        "name": "Namibia",
+        "iso3166Alpha3": "NAM"
+    },
+    "ng": {
+        "name": "Nigeria",
+        "iso3166Alpha3": "NGA"
+    },
+    "nl": {
+        "name": "Netherlands",
+        "iso3166Alpha3": "NLD"
+    },
+    "no": {
+        "name": "Norway",
+        "iso3166Alpha3": "NOR"
+    },
+    "np": {
+        "name": "Nepal",
+        "iso3166Alpha3": "NPL"
+    },
+    "nz": {
+        "name": "New Zealand",
+        "iso3166Alpha3": "NZL"
+    },
+    "om": {
+        "name": "Oman",
+        "iso3166Alpha3": "OMN"
+    },
+    "pa": {
+        "name": "Panama",
+        "iso3166Alpha3": "PAN"
+    },
+    "pe": {
+        "name": "Peru",
+        "iso3166Alpha3": "PER"
+    },
+    "ph": {
+        "name": "Philippines",
+        "iso3166Alpha3": "PHL"
+    },
+    "pk": {
+        "name": "Pakistan",
+        "iso3166Alpha3": "PAK",
+        "veryLimitedStreetView": true
+    },
+    "pl": {
+        "name": "Poland",
+        "iso3166Alpha3": "POL"
+    },
+    "pm": {
+        "name": "Saint Pierre and Miquelon",
+        "iso3166Alpha3": "SPM"
+    },
+    "pn": {
+        "name": "Pitcairn Islands",
+        "iso3166Alpha3": "PCN"
+    },
+    "pr": {
+        "name": "Puerto Rico",
+        "iso3166Alpha3": "PRI"
+    },
+    "ps": {
+        "name": "Palestine",
+        "iso3166Alpha3": "PSE"
+    },
+    "pt": {
+        "name": "Portugal",
+        "iso3166Alpha3": "PRT"
+    },
+    "py": {
+        "name": "Paraguay",
+        "iso3166Alpha3": "PRY"
+    },
+    "qa": {
+        "name": "Qatar",
+        "iso3166Alpha3": "QAT"
+    },
+    "re": {
+        "name": "Réunion",
+        "iso3166Alpha3": "REU"
+    },
+    "ro": {
+        "name": "Romania",
+        "iso3166Alpha3": "ROU"
+    },
+    "rs": {
+        "name": "Serbia",
+        "iso3166Alpha3": "SRB"
+    },
+    "ru": {
+        "name": "Russia",
+        "iso3166Alpha3": "RUS"
+    },
+    "rw": {
+        "name": "Rwanda",
+        "iso3166Alpha3": "RWA"
+    },
+    "sa": {
+        "name": "Saudi Arabia",
+        "iso3166Alpha3": "SAU",
+        "hasStreetView": false
+    },
+    "se": {
+        "name": "Sweden",
+        "iso3166Alpha3": "SWE"
+    },
+    "sg": {
+        "name": "Singapore",
+        "iso3166Alpha3": "SGP"
+    },
+    "si": {
+        "name": "Slovenia",
+        "iso3166Alpha3": "SVN"
+    },
+    "sj": {
+        "name": "Svalbard and Jan Mayen",
+        "iso3166Alpha3": "SJM"
+    },
+    "sk": {
+        "name": "Slovakia",
+        "iso3166Alpha3": "SVK"
+    },
+    "sm": {
+        "name": "San Marino",
+        "iso3166Alpha3": "SMR"
+    },
+    "sn": {
+        "name": "Senegal",
+        "iso3166Alpha3": "SEN"
+    },
+    "st": {
+        "name": "Sao Tome and Principe",
+        "iso3166Alpha3": "STP"
+    },
+    "sv": {
+        "name": "El Salvador",
+        "iso3166Alpha3": "SLV",
+        "hasStreetView": false
+    },
+    "sz": {
+        "name": "Eswatini",
+        "iso3166Alpha3": "SWZ"
+    },
+    "th": {
+        "name": "Thailand",
+        "iso3166Alpha3": "THA"
+    },
+    "tn": {
+        "name": "Tunisia",
+        "iso3166Alpha3": "TUN"
+    },
+    "tr": {
+        "name": "Türkiye",
+        "iso3166Alpha3": "TUR"
+    },
+    "tw": {
+        "name": "Taiwan",
+        "iso3166Alpha3": "TWN"
+    },
+    "tz": {
+        "name": "Tanzania",
+        "iso3166Alpha3": "TZA",
+        "veryLimitedStreetView": true
+    },
+    "ua": {
+        "name": "Ukraine",
+        "iso3166Alpha3": "UKR"
+    },
+    "ug": {
+        "name": "Uganda",
+        "iso3166Alpha3": "UGA"
+    },
+    "um": {
+        "name": "United States Minor Outlying Islands",
+        "iso3166Alpha3": "UMI"
+    },
+    "us": {
+        "name": "United States",
+        "iso3166Alpha3": "USA"
+    },
+    "uy": {
+        "name": "Uruguay",
+        "iso3166Alpha3": "URY"
+    },
+    "uz": {
+        "name": "Uzbekistan",
+        "iso3166Alpha3": "UZB",
+        "hasStreetView": false
+    },
+    "ve": {
+        "name": "Venezuela",
+        "iso3166Alpha3": "VEN",
+        "veryLimitedStreetView": true
+    },
+    "vi": {
+        "name": "U.S. Virgin Islands",
+        "iso3166Alpha3": "VIR"
+    },
+    "vn": {
+        "name": "Vietnam",
+        "iso3166Alpha3": "VNM"
+    },
+    "vu": {
+        "name": "Vanuatu",
+        "iso3166Alpha3": "VUT",
+        "veryLimitedStreetView": true
+    },
+    "xk": {
+        "name": "Kosovo",
+        "iso3166Alpha3": "XKX",
+        "hasStreetView": false
+    },
+    "za": {
+        "name": "South Africa",
+        "iso3166Alpha3": "ZAF"
+    },
+    "zm": {
+        "name": "Zambia",
+        "iso3166Alpha3": "ZMB",
+        "hasStreetView": false
+    },
+    "zw": {
+        "name": "Zimbabwe",
+        "iso3166Alpha3": "ZWE",
+        "hasStreetView": false
     }
 }

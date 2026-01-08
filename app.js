@@ -122,16 +122,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function refreshDisplays() {
     // Update title
-    const modeTitle = document.getElementById('modeTitle');
-    if (modeTitle) {
-        const modeName = currentMode === 'noMove' ? 'No Move' : currentMode === 'nmpz' ? 'NMPZ' : 'Moving';
-        modeTitle.textContent = `Average Score Difference Per Country (${modeName} Mode)`;
+    const listTitle = document.getElementById('listTitle');
+    const boxplotTitle = document.getElementById('boxplotTitle');
+
+    const metric = (document.getElementById('countrylist-metric-select') || { value: 'scoreDiff' }).value;
+    let metricName = 'Score Difference';
+    if (metric === 'guessedFirstRate') 
+        metricName = 'Guessed-First Rate';
+    else if (metric === 'score') 
+        metricName = 'Score';
+    else if (metric === 'distance') 
+        metricName = 'Distance';
+
+    if (listTitle) {
+        listTitle.textContent = `${metric !== "guessedFirstRate" ? "Median " : ""}${metricName} Per Country`;
+    }
+    if (boxplotTitle) {
+        boxplotTitle.textContent = `${metricName} by Country (Boxplot)`;
     }
     
     displayPerformanceMap();
     displayGuessesMap();
     displayBoxplot();
-    displayScoreDiffPerCountry();
+    displayStatsAsList();
 }
 
 async function fetchGameTokens() {
@@ -373,13 +386,32 @@ async function getStats(gameTokens, numberOfGames) {
             let round = 0;
             let roundInfo = game.rounds[round];
             while (roundInfo = game.rounds[round]) {
-                const countryCode = roundInfo.panorama.countryCode;
+                let countryCode = roundInfo.panorama.countryCode;
+
                 const panoramaData = roundInfo.panorama;
                 const panorama = {
                     panoId: panoramaData.panoId,
                     lat: panoramaData.lat,
                     lng: panoramaData.lng
                 };
+                
+                if (!countryCode) {
+                    // it can happen that Cocos Islands don't have a country code set
+                    if (panorama.lat <= -11.798727 && panorama.lat >= -12.236607 && panorama.lng >= 96.792723 && panorama.lng <= 96.974684) {
+                        countryCode = "cc";
+                    }
+                } else if (countryCode === "fr") {
+                    // Réunion is marked as France
+                    if (panorama.lat <= -20.692274 && panorama.lat >= -21.478713 && panorama.lng >= 55.104502 && panorama.lng <= 55.945443) {
+                        countryCode = "re";
+                    }
+                } else if (countryCode === "cn") {
+                    // Macau is marked as China, we want it as "mo"
+                    if (panorama.lat <= 22.220582 && panorama.lat >= 22.106154 && panorama.lng >= 113.521383 && panorama.lng <= 113.606134) {
+                        countryCode = "mo";
+                    }
+                }
+                // TODO: other special cases? (pm, io, ...)
 
                 const roundStartTime = new Date(roundInfo.startTime);
                 const roundFirstGuessTime = roundInfo.timerStartTime;
@@ -470,7 +502,7 @@ const loadSavedStats = true;
 let game_tokens = [];
 let stats = null;
 
-let cldrToIso = {};
+let countryData = {}; // Maps CLDR country code to {name, iso3166Alpha3}
 
 (async () => {
     if (loadSavedTokens) {
@@ -491,7 +523,7 @@ let cldrToIso = {};
         console.log('Data loaded:', stats);
     }
 
-    cldrToIso = (await fetch('countries.json').then(res => res.json())).cldrToIso3166Alpha3;
+    countryData = await fetch('countries.json').then(res => res.json());
     
     refreshDisplays();
 })();
@@ -506,6 +538,14 @@ function countryCodeToFlag(countryCode) {
         .split('')
         .map(char => 127397 + char.charCodeAt(0));
     return String.fromCodePoint(...codePoints);
+}
+
+function getCountryName(cldrCode) {
+    return countryData[cldrCode]?.name || cldrCode;
+}
+
+function getCountryIso3(cldrCode) {
+    return countryData[cldrCode]?.iso3166Alpha3 || cldrCode.toUpperCase();
 }
 
 function calculateMedian(values) {
@@ -537,7 +577,7 @@ const rateColorScale = [
 ];
 const distanceColorscale = undefined; // TODO
 
-function displayScoreDiffPerCountry() {
+function displayStatsAsList() {
     const statsContent = document.getElementById('statsContent');
     
     if (!stats || !stats[currentMode] || !stats[currentMode].rounds) {
@@ -587,7 +627,8 @@ function displayScoreDiffPerCountry() {
         const codeSpan = document.createElement('span');
         codeSpan.className = 'country-code';
         codeSpan.textContent = countryCodeToFlag(countryCode);
-        codeSpan.title = countryCode;
+        codeSpan.title = getCountryName(countryCode);
+        codeSpan.style.cursor = 'help';
 
         const infoContainer = document.createElement('div');
         infoContainer.style.display = 'flex';
@@ -606,7 +647,7 @@ function displayScoreDiffPerCountry() {
         countSpan.style.fontSize = '12px';
         countSpan.style.color = '#888';
         countSpan.style.marginTop = '4px';
-        countSpan.textContent = `${count} locations`;
+        countSpan.textContent = `${count} ${count === 1 ? 'location' : 'locations'}`;
 
         infoContainer.appendChild(scoreSpan);
         infoContainer.appendChild(countSpan);
@@ -618,6 +659,47 @@ function displayScoreDiffPerCountry() {
     
     statsContent.innerHTML = '';
     statsContent.appendChild(grid);
+    
+    // Add unencountered countries section
+    const encounteredCodes = new Set(countries.map(([cc]) => cc));
+    const unencounteredCountries = Object.keys(countryData).filter(cldrCode => {
+        const country = countryData[cldrCode];
+        // Include countries that have Street View (not marked as false) and are not encountered
+        return country.hasStreetView !== false && !country.veryLimitedStreetView && !encounteredCodes.has(cldrCode);
+    });
+    
+    if (unencounteredCountries.length > 0) {
+        const unencounteredSection = document.createElement('div');
+        unencounteredSection.style.marginTop = '30px';
+        unencounteredSection.style.padding = '15px';
+        unencounteredSection.style.background = '#f5f5f5';
+        unencounteredSection.style.borderRadius = '6px';
+        
+        const heading = document.createElement('h3');
+        heading.textContent = 'Countries Not Encountered:';
+        heading.style.fontSize = '14px';
+        heading.style.marginBottom = '10px';
+        heading.style.color = '#666';
+        unencounteredSection.appendChild(heading);
+        
+        const flagContainer = document.createElement('div');
+        flagContainer.style.display = 'flex';
+        flagContainer.style.flexWrap = 'wrap';
+        flagContainer.style.gap = '8px';
+        
+        unencounteredCountries.forEach(cldrCode => {
+            const flagSpan = document.createElement('span');
+            flagSpan.textContent = countryCodeToFlag(cldrCode);
+            flagSpan.title = getCountryName(cldrCode);
+            flagSpan.style.fontSize = '24px';
+            flagSpan.style.cursor = 'help';
+            flagSpan.style.fontFamily = "'Twemoji Country Flags', 'Apple Color Emoji', sans-serif";
+            flagContainer.appendChild(flagSpan);
+        });
+        
+        unencounteredSection.appendChild(flagContainer);
+        statsContent.appendChild(unencounteredSection);
+    }
 }
 
 function displayPerformanceMap() {
@@ -685,35 +767,64 @@ function displayPerformanceMap() {
     });
     
     // Calculate medians for each country
-    const countries = [];
+    const countryCodes = [];
+    const countryNames = [];
+    const cldrCodes = [];
     const z = [];
     const locationCounts = [];
-    Object.entries(valuesByCountry).forEach(([cc, vals]) => {
-        countries.push(cldrToIso[cc]);
+    const displayValues = [];
+    Object.entries(valuesByCountry).forEach(([cldrCode, vals]) => {
+        countryCodes.push(getCountryIso3(cldrCode));
+        countryNames.push(getCountryName(cldrCode));
+        cldrCodes.push(cldrCode);
         locationCounts.push(vals.length);
         if (metric === 'guessedFirstRate') {
             const sum = vals.reduce((a, b) => a + b, 0);
-            z.push(vals.length ? (sum / vals.length) : 0);
+            const rate = vals.length ? (sum / vals.length) : 0;
+            z.push(rate);
+            displayValues.push(`${Math.round(rate * 10000) / 100}%`);
         } else {
-            z.push(calculateMedian(vals));
+            const med = calculateMedian(vals);
+            z.push(med);
+            displayValues.push(med);
         }
     });
 
     const isRate = metric === 'guessedFirstRate';
+    let metricTitle = "Score Difference";
+    if (metric === 'score') {
+        metricTitle = "Score";
+    } else if (metric === 'distance') {
+        metricTitle = "Distance";
+    } else if (metric === 'guessedFirstRate') {
+        metricTitle = "Guessed-first rate";
+    }
+
     const data = [{
         type: 'choropleth',
-        locations: countries,
-        z: z,
+        locations: countryCodes,
+        z,
         colorscale,
         colorbar: {
             title: isRate ? 'Guessed-first rate' : `Median ${metric}`
         },
         zmin,
         zmax,
-        hovertext: countries.map((cc, i) => 
-            `${cc}<br>Value: ${isRate ? (Math.round(z[i]*10000)/100)+'%' : z[i]}<br>Locations: ${locationCounts[i]}`
-        ),
+        customdata: countryCodes.map((_, i) => ({
+            name: countryNames[i],
+            flag: countryCodeToFlag(cldrCodes[i]),
+            value: displayValues[i],
+            count: locationCounts[i]
+        })),
+        hovertemplate:
+            '<span style="font-family: \'Twemoji Country Flags\', \'Apple Color Emoji\', sans-serif;">%{customdata.flag}</span> %{customdata.name}<br>' +
+            `${metricTitle}: %{customdata.value}<br>` +
+            'Locations: %{customdata.count}' +
+            '<extra></extra>',
         hoverinfo: 'text',
+        hoverlabel: {
+            bgcolor: '#f9f9f9'
+        }
     }];
     
     const layout = {
@@ -777,7 +888,9 @@ function displayGuessesMap() {
         else if (metric === 'distance') 
             val = round.distance;
         values.push(val);
-        hoverTexts.push(`${metric}: ${val}<br>Score: ${round.score}<br>Δ Score: ${round.scoreDiff > 0 ? '+' : ''}${round.scoreDiff}<br>Country: ${round.countryCode}<br>${new Date(stats[currentMode].games[round.game]?.startTime).toLocaleDateString()}`);
+        const countryFlag = countryCodeToFlag(round.countryCode);
+        const countryName = getCountryName(round.countryCode);
+        hoverTexts.push(`<span style="font-family: 'Twemoji Country Flags', 'Apple Color Emoji', sans-serif;">${countryFlag}</span> ${countryName}<br>Score: ${round.score}<br>Δ Score: ${round.scoreDiff > 0 ? '+' : ''}${round.scoreDiff}<br>${new Date(stats[currentMode].games[round.game]?.startTime).toLocaleDateString()}`);
     });
 
     values.push(0);
@@ -898,25 +1011,31 @@ function displayBoxplot() {
     countriesWithMedian.sort((a, b) => b.median - a.median);
     
     // Prepare data for boxplot
-    const traces = countriesWithMedian.map(item => ({
-        y: item.values,
-        type: 'box',
-        name: countryCodeToFlag(item.country),
-        customdata: item.values.map(() => ({
-            country: item.country,
-            countryFlag: countryCodeToFlag(item.country),
-            median: item.median,
-            count: item.values.length
-        })),
-        hovertemplate: 
-            '<b style="font-family: \'Twemoji Country Flags\', \'Apple Color Emoji\', sans-serif;">%{customdata.countryFlag}</b>&nbsp;' +
-            'Score Difference %{y}<br>' +
-            '<extra></extra>',
-        boxmean: false,
-        marker: {
-            color: '#4caf50'
-        }
-    }));
+    const traces = countriesWithMedian.map(item => {
+        const countryFlag = countryCodeToFlag(item.country);
+        const countryName = getCountryName(item.country);
+        return {
+            y: item.values,
+            type: 'box',
+            name: countryFlag,
+            customdata: item.values.map(() => ({
+                country: item.country,
+                countryFlag: countryFlag,
+                countryName: countryName,
+                median: item.median,
+                count: item.values.length
+            })),
+            hovertemplate: 
+                '<b style="font-family: \'Twemoji Country Flags\', \'Apple Color Emoji\', sans-serif;">%{customdata.countryFlag}</b>&nbsp;' +
+                '<b>%{customdata.countryName}</b><br>' +
+                'Score Difference: %{y}<br>' +
+                '<extra></extra>',
+            boxmean: false,
+            marker: {
+                color: '#4caf50'
+            }
+        };
+    });
     // TODO: better labels for the boxes, not just the outliers
     
     // Show only a subset of countries at once (20 countries)
@@ -936,7 +1055,11 @@ function displayBoxplot() {
         xaxis: {
             title: 'Country',
             range: [-0.5, Math.min(visibleCountries - 0.5, totalCountries - 0.5)],
-            rangeslider: { visible: true }
+            rangeslider: { visible: true },
+            tickfont: {
+                family: 'Twemoji Country Flags, Apple Color Emoji, sans-serif',
+                size: 20
+            }
         },
         showlegend: false,
         height: 700,
