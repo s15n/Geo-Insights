@@ -143,16 +143,30 @@ h1 {
 
 /* Metric selector styling */
 .metric-selector {
-    display: flex;
+    display: inline-flex;
     gap: 8px;
     align-items: center;
     margin-top: 8px;
+    margin-right: 8px;
 }
 .metric-selector label {
     font-size: 12px;
     color: #444;
 }
 .metric-selector select {
+    font-size: 12px;
+    padding: 4px 6px;
+}
+
+/* Evolution controls row */
+.selector-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 8px;
+    flex-wrap: wrap;
+}
+.selector-row select {
     font-size: 12px;
     padding: 4px 6px;
 }
@@ -275,4 +289,8 @@ h1 {
     width: 100%;
     border-radius: 8px;
     border-color: #aaa;
+}
+
+#evolution-country-select {
+    font-family: 'Twemoji Country Flags', 'Apple Color Emoji', sans-serif;
 }

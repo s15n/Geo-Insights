@@ -38,6 +38,7 @@ let overviewStats = null;
 let selectedCategory = 'teamDuels';
 let selectedTeamId = null;
 let duelsScope = 'ranked'; // ranked | all
+let selectedEvolutionCountry = null; // 'world' or CLDR code
 
 function persistValue(key, value) {
     try {
@@ -67,7 +68,9 @@ const LS_KEYS = {
     metric_map: 'ls_metric_map',
     metric_guesses: 'ls_metric_guesses',
     metric_boxplot: 'ls_metric_boxplot',
-    metric_countrylist: 'ls_metric_countrylist'
+    metric_countrylist: 'ls_metric_countrylist',
+    metric_evolution: 'ls_metric_evolution',
+    evolution_country: 'ls_evolution_country'
 };
 
 function loadPersistedState() {
@@ -83,6 +86,8 @@ function loadPersistedState() {
     if (storedDuelsScope) duelsScope = storedDuelsScope;
     const storedMode = loadPersistedValue(LS_KEYS.currentMode);
     if (storedMode) currentMode = storedMode;
+    const storedEvoCountry = loadPersistedValue(LS_KEYS.evolution_country);
+    if (storedEvoCountry) selectedEvolutionCountry = storedEvoCountry;
 }
 
 loadPersistedState();
@@ -140,6 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (id === 'guesses-metric-select') return LS_KEYS.metric_guesses;
         if (id === 'boxplot-metric-select') return LS_KEYS.metric_boxplot;
         if (id === 'countrylist-metric-select') return LS_KEYS.metric_countrylist;
+        if (id === 'evolution-metric-select') return LS_KEYS.metric_evolution;
         return null;
     }
 
@@ -185,16 +191,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Keep selectors aligned with sections order
     createMetricSelector('.stats-container:nth-of-type(1)', 'map-metric-select', true);
     createMetricSelector('.stats-container:nth-of-type(2)', 'guesses-metric-select', false, 'score');
     createMetricSelector('.stats-container:nth-of-type(3)', 'boxplot-metric-select', false);
-    createMetricSelector('.stats-container:nth-of-type(4)', 'countrylist-metric-select', true);
+    // New evolution section at index 4
+    createMetricSelector('.stats-container:nth-of-type(4)', 'evolution-metric-select', false, 'scoreDiff');
+    // Country list moved to index 5
+    createMetricSelector('.stats-container:nth-of-type(5)', 'countrylist-metric-select', true);
 });
 
 function refreshDisplays() {
     // Update title
     const listTitle = document.getElementById('listTitle');
     const boxplotTitle = document.getElementById('boxplotTitle');
+    const evolutionTitle = document.getElementById('evolutionTitle');
 
     const metric = (document.getElementById('countrylist-metric-select') || { value: 'scoreDiff' }).value;
     let metricName = 'Score Difference';
@@ -211,10 +222,20 @@ function refreshDisplays() {
     if (boxplotTitle) {
         boxplotTitle.textContent = `${metricName} by Country (Boxplot)`;
     }
+    if (evolutionTitle) {
+        const evoMetric = (document.getElementById('evolution-metric-select') || { value: 'scoreDiff' }).value;
+        const evoMetricName = evoMetric === 'score' ? 'Score' : 'Score Difference';
+        const sel = selectedEvolutionCountry || 'world';
+        let titleCountry = 'Worldwide';
+        if (sel !== 'world') titleCountry = getCountryName(sel);
+        evolutionTitle.textContent = `${evoMetricName} Evolution — ${titleCountry}`;
+    }
     
     displayPerformanceMap();
     displayGuessesMap();
     displayBoxplot();
+    renderEvolutionControls();
+    displayEvolutionGraph();
     displayStatsAsList();
 }
 
@@ -581,6 +602,8 @@ const loadSavedStats = true;
     }
 
     countryData = await fetch('countries.json').then(res => res.json());
+
+    console.log('Loading menu data...');
     await loadMenuData();
 
     if (loadSavedStats) {
@@ -649,6 +672,72 @@ async function loadMenuData() {
     } catch (e) {
         console.warn('Failed to load menu data', e);
     }
+}
+
+function ensureDefaultEvolutionCountry() {
+    if (!stats || !stats[currentMode] || !stats[currentMode].rounds) return 'world';
+    const rounds = stats[currentMode].rounds;
+    const metric = (document.getElementById('evolution-metric-select') || { value: 'scoreDiff' }).value;
+    const valuesByCountry = {};
+    rounds.forEach(r => {
+        const cc = r.countryCode;
+        if (!valuesByCountry[cc]) valuesByCountry[cc] = [];
+        valuesByCountry[cc].push(metric === 'score' ? r.score : r.scoreDiff);
+    });
+    const threshold = 10; // substantial amount
+    const ranked = Object.entries(valuesByCountry).map(([cc, vals]) => {
+        const med = calculateMedian(vals);
+        return { cc, med, count: vals.length };
+    }).filter(x => x.count >= threshold)
+      .sort((a, b) => b.med - a.med);
+    return ranked.length ? ranked[0].cc : 'world';
+}
+
+function renderEvolutionControls() {
+    const wrap = document.getElementById('evolutionControls');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+
+    // Country selector
+    const label = document.createElement('label');
+    label.textContent = 'Country:';
+    label.style.fontSize = '12px';
+    label.style.color = '#444';
+
+    const select = document.createElement('select');
+    select.id = 'evolution-country-select';
+
+    // Worldwide option
+    const unFlag = '🇺🇳';
+    const worldwideOption = new Option(`${unFlag} Worldwide`, 'world');
+    select.appendChild(worldwideOption);
+
+    if (stats && stats[currentMode] && stats[currentMode].rounds) {
+        const rounds = stats[currentMode].rounds;
+        const counts = {};
+        rounds.forEach(r => { counts[r.countryCode] = (counts[r.countryCode] || 0) + 1; });
+        const entries = Object.keys(counts)
+            .sort((a, b) => counts[b] - counts[a])
+            .map(cc => ({ cc, name: getCountryName(cc), flag: countryCodeToFlag(cc), count: counts[cc] }));
+        entries.forEach(e => {
+            const opt = new Option(`${e.flag} ${e.name} (${e.count})`, e.cc);
+            select.appendChild(opt);
+        });
+    }
+
+    if (!selectedEvolutionCountry) {
+        selectedEvolutionCountry = ensureDefaultEvolutionCountry();
+        persistValue(LS_KEYS.evolution_country, selectedEvolutionCountry);
+    }
+    select.value = selectedEvolutionCountry || 'world';
+    select.addEventListener('change', () => {
+        selectedEvolutionCountry = select.value;
+        persistValue(LS_KEYS.evolution_country, selectedEvolutionCountry);
+        refreshDisplays();
+    });
+
+    wrap.appendChild(label);
+    wrap.appendChild(select);
 }
 
 function formatWinRate(rate) {
@@ -1331,4 +1420,364 @@ function displayBoxplot() {
     };
     
     Plotly.newPlot('boxplot', traces, layout, config);
+}
+
+function linearRegression(xs, ys) {
+    const n = xs.length;
+    if (n === 0) return null;
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    for (let i = 0; i < n; i++) {
+        const x = xs[i];
+        const y = ys[i];
+        sumX += x; sumY += y; sumXY += x * y; sumXX += x * x;
+    }
+    const denom = (n * sumXX - sumX * sumX);
+    if (denom === 0) return null;
+    const a = (n * sumXY - sumX * sumY) / denom; // slope
+    const b = (sumY - a * sumX) / n; // intercept
+    return { a, b };
+}
+
+// Calculate monthly medians for evolution graph
+function calculateMonthlyMedians(xs, ys, minDataPoints = 3) {
+    if (xs.length === 0) return { monthStarts: [], medians: [], counts: [] };
+    
+    const monthMap = {}; // key: "YYYY-MM" -> {values, dates}
+    
+    for (let i = 0; i < xs.length; i++) {
+        const date = new Date(xs[i]);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const key = `${year}-${month}`;
+        
+        if (!monthMap[key]) monthMap[key] = { values: [], dates: [] };
+        monthMap[key].values.push(ys[i]);
+        monthMap[key].dates.push(xs[i]);
+    }
+    
+    // Sort by month key
+    const sortedKeys = Object.keys(monthMap).sort();
+    
+    // First pass: identify which months have enough data points
+    const monthsWithData = {};
+    sortedKeys.forEach(key => {
+        const dataCount = monthMap[key].values.length;
+        monthsWithData[key] = dataCount >= minDataPoints;
+    });
+    
+    // Second pass: group months with too few data points with adjacent months
+    const groupedMonths = [];
+    let currentGroup = [];
+    
+    sortedKeys.forEach((key, idx) => {
+        currentGroup.push(key);
+        
+        // Check if this month or the next month has enough data
+        const hasEnoughData = monthsWithData[key];
+        const nextKeyHasData = idx < sortedKeys.length - 1 && monthsWithData[sortedKeys[idx + 1]];
+        
+        if (hasEnoughData || !nextKeyHasData || idx === sortedKeys.length - 1) {
+            // End of group: either this month has data, or next month doesn't have data, or it's the last month
+            groupedMonths.push([...currentGroup]);
+            currentGroup = [];
+        }
+    });
+    
+    // Third pass: calculate medians for each group, using the median value's actual date as x
+    const monthStarts = [];
+    const medians = [];
+    const counts = [];
+    
+    groupedMonths.forEach((group, groupIdx) => {
+        // Combine all values and dates from the group
+        let allValues = [];
+        let allDates = [];
+        group.forEach(key => {
+            allValues = allValues.concat(monthMap[key].values);
+            allDates = allDates.concat(monthMap[key].dates);
+        });
+        
+        if (allValues.length < minDataPoints) return;
+        
+        // Calculate median
+        const sorted = allValues.sort((a, b) => a - b);
+        const medianIdx = Math.floor(allValues.length / 2);
+        const median = sorted.length % 2 === 0 
+            ? (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2
+            : sorted[medianIdx];
+        
+        // Find the date of the median value in the original data
+        let medianDate;
+        if (sorted.length % 2 === 0) {
+            // For even-length arrays, use the average of the two middle values' dates
+            const lowerIdx = allValues.indexOf(sorted[sorted.length / 2 - 1]);
+            const upperIdx = allValues.indexOf(sorted[sorted.length / 2]);
+            medianDate = (allDates[lowerIdx] + allDates[upperIdx]) / 2;
+        } else {
+            // For odd-length arrays, use the median value's date
+            const medianValueIdx = allValues.indexOf(sorted[medianIdx]);
+            medianDate = allDates[medianValueIdx];
+        }
+        
+        monthStarts.push(medianDate);
+        counts.push(allValues.length);
+        medians.push(median);
+    });
+    
+    // Override first and last timestamps with earliest and latest from entire dataset
+    if (monthStarts.length > 0) {
+        monthStarts[0] = xs[0]; // First timestamp in entire dataset
+        monthStarts[monthStarts.length - 1] = xs[xs.length - 1]; // Last timestamp in entire dataset
+    }
+    
+    return { monthStarts, medians, counts };
+}
+
+// Catmull-Rom spline interpolation
+function splineInterpolate(xs, ys, resolution = 100) {
+    if (xs.length < 2) return { x: xs, y: ys, derivs: [0] };
+    
+    // For Catmull-Rom, we need at least 4 points, so we'll handle edge cases
+    const points = xs.map((x, i) => ({ x, y: ys[i] }));
+    const result = { x: [], y: [], derivs: [] };
+    
+    // Helper to compute Catmull-Rom derivative at parameter t
+    function catmullRomDerivative(p0y, p1y, p2y, p3y, t) {
+        const t2 = t * t;
+        return 0.5 * (
+            (-p0y + p2y) +
+            2 * (2 * p0y - 5 * p1y + 4 * p2y - p3y) * t +
+            3 * (-p0y + 3 * p1y - 3 * p2y + p3y) * t2
+        );
+    }
+    
+    // Store derivatives at each control point for extrapolation
+    const pointDerivs = [];
+    for (let i = 0; i < xs.length; i++) {
+        const p0 = i === 0 ? points[0] : points[i - 1];
+        const p1 = points[i];
+        const p2 = i === xs.length - 1 ? points[i] : points[i + 1];
+        const p3 = i < xs.length - 2 ? points[i + 2] : points[i];
+        
+        // Approximate derivative at this point (derivative at t=0 for the next segment)
+        let deriv;
+        if (i === 0) {
+            // At first point, estimate from first two points
+            deriv = (ys[1] - ys[0]) / (xs[1] - xs[0]);
+        } else if (i === xs.length - 1) {
+            // At last point, use derivative from previous segment at t=1
+            const prevP0 = i < 2 ? points[0] : points[i - 2];
+            const prevP1 = points[i - 1];
+            const prevP2 = points[i];
+            const prevP3 = points[i]; // boundary
+            const dxdt = (prevP2.x - prevP1.x); // assuming unit parameter
+            const dydt = catmullRomDerivative(prevP0.y, prevP1.y, prevP2.y, prevP3.y, 1.0);
+            deriv = dydt / dxdt;
+        } else {
+            // At intermediate points, use centered difference
+            deriv = (ys[i + 1] - ys[i - 1]) / (xs[i + 1] - xs[i - 1]);
+        }
+        pointDerivs.push(deriv);
+    }
+    
+    // Add points along the spline with higher resolution
+    for (let i = 0; i < xs.length - 1; i++) {
+        // Use Catmull-Rom with extended boundaries for first/last segments
+        const p0 = i === 0 ? points[0] : points[i - 1];
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const p3 = i === xs.length - 2 ? points[i + 1] : points[i + 2];
+        
+        for (let t = 0; t < 1; t += 1 / resolution) {
+            const t2 = t * t;
+            const t3 = t2 * t;
+            
+            // Catmull-Rom basis functions
+            const q = 0.5 * (
+                (2 * p1.y) +
+                (-p0.y + p2.y) * t +
+                (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+                (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3
+            );
+            
+            // Linear interpolation for x (time)
+            const x = p1.x + (p2.x - p1.x) * t;
+            
+            result.x.push(x);
+            result.y.push(q);
+        }
+    }
+    
+    // Add the last point
+    result.x.push(xs[xs.length - 1]);
+    result.y.push(ys[ys.length - 1]);
+    result.derivs = pointDerivs;
+    
+    return result;
+}
+
+// Estimate second derivative using finite differences
+function estimateSecondDerivative(xs, ys, index) {
+    if (index <= 0 || index >= xs.length - 1) return 0;
+    const h1 = xs[index] - xs[index - 1];
+    const h2 = xs[index + 1] - xs[index];
+    const y_prev = ys[index - 1];
+    const y_curr = ys[index];
+    const y_next = ys[index + 1];
+    return 2 * ((y_next - y_curr) / h2 - (y_curr - y_prev) / h1) / (h1 + h2);
+}
+
+function displayEvolutionGraph() {
+    const chartEl = document.getElementById('evolutionChart');
+    if (!chartEl) return;
+    if (!stats || !stats[currentMode] || !stats[currentMode].rounds) {
+        chartEl.innerHTML = '<p>No data available</p>';
+        return;
+    }
+
+    const rounds = stats[currentMode].rounds;
+    if (!rounds.length) {
+        chartEl.innerHTML = '<p>No data available</p>';
+        return;
+    }
+
+    const metric = (document.getElementById('evolution-metric-select') || { value: 'scoreDiff' }).value;
+    const country = selectedEvolutionCountry || 'world';
+
+    // Build series
+    const xs = [];
+    const ys = [];
+    const texts = [];
+    for (const r of rounds) {
+        if (country !== 'world' && r.countryCode !== country) continue;
+        const game = stats[currentMode].games[r.game];
+        const t = game?.startTime ? new Date(game.startTime).getTime() : null;
+        if (!t) continue;
+        xs.push(t);
+        ys.push(metric === 'score' ? r.score : r.scoreDiff);
+        const flag = countryCodeToFlag(r.countryCode);
+        const name = getCountryName(r.countryCode);
+        const dateStr = game?.startTime ? new Date(game.startTime).toLocaleDateString() : '';
+        texts.push(`<span style="font-family: 'Twemoji Country Flags','Apple Color Emoji',sans-serif;">${flag}</span> ${name}<br>${metric === 'score' ? 'Score' : 'Δ Score'}: ${metric === 'score' ? r.score : (r.scoreDiff > 0 ? '+' : '') + r.scoreDiff}<br>${dateStr}`);
+    }
+
+    // Sort by time
+    const idx = xs.map((_, i) => i).sort((a, b) => xs[a] - xs[b]);
+    const xSorted = idx.map(i => xs[i]);
+    const ySorted = idx.map(i => ys[i]);
+    const textSorted = idx.map(i => texts[i]);
+
+    // Calculate monthly medians
+    const { monthStarts, medians } = calculateMonthlyMedians(xSorted, ySorted);
+    
+    let trendTrace = null;
+    if (monthStarts.length > 0) {
+        // Spline interpolation through monthly medians
+        const splineData = splineInterpolate(monthStarts, medians, 150);
+        
+        // Extend spline backwards to first datapoint
+        const firstDate = new Date(xSorted[0]);
+        const lastDate = new Date(xSorted[xSorted.length - 1]);
+        const firstMonth = new Date(monthStarts[0]);
+        const lastMonth = new Date(monthStarts[monthStarts.length - 1]);
+        
+        // Prepend points from first datapoint to first month start
+        if (firstDate < firstMonth) {
+            const slope = (medians[0] - splineData.y[0]) / (monthStarts[0] - splineData.x[0]);
+            const extendedX = [];
+            const extendedY = [];
+            const steps = 50;
+            for (let i = steps - 1; i >= 0; i--) {
+                const t = i / steps;
+                const x = xSorted[0] + (monthStarts[0] - xSorted[0]) * t;
+                const y = medians[0] - slope * (monthStarts[0] - x);
+                extendedX.push(x);
+                extendedY.push(y);
+            }
+            splineData.x = [...extendedX, ...splineData.x];
+            splineData.y = [...extendedY, ...splineData.y];
+        }
+        
+        // Append points from last month to present (last datapoint)
+        if (lastDate > lastMonth) {
+            const slope = (splineData.y[splineData.y.length - 1] - medians[medians.length - 1]) / 
+                         (splineData.x[splineData.x.length - 1] - monthStarts[monthStarts.length - 1]);
+            const steps = 50;
+            for (let i = 1; i <= steps; i++) {
+                const t = i / steps;
+                const x = lastMonth.getTime() + (lastDate.getTime() - lastMonth.getTime()) * t;
+                const y = medians[medians.length - 1] + slope * (x - monthStarts[monthStarts.length - 1]);
+                splineData.x.push(x);
+                splineData.y.push(y);
+            }
+        }
+        
+        trendTrace = {
+            x: splineData.x.map(ms => new Date(ms)),
+            y: splineData.y,
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Trend', // (monthly medians)
+            line: { color: '#2f7a34', width: 2 },
+            hoverinfo: 'skip'
+        };
+    }
+    if (xSorted.length > 0 && medians.length < 2) {
+        // Not enough data for monthly medians, draw straight line at overall median
+        const sortedValues = [...ySorted].sort((a, b) => a - b);
+        const overallMedian = sortedValues.length % 2 === 0 
+            ? (sortedValues[sortedValues.length / 2 - 1] + sortedValues[sortedValues.length / 2]) / 2
+            : sortedValues[Math.floor(sortedValues.length / 2)];
+        
+        trendTrace = {
+            x: [new Date(xSorted[0]), new Date(xSorted[xSorted.length - 1])],
+            y: [overallMedian, overallMedian],
+            type: 'scatter',
+            mode: 'lines',
+            name: 'Trend', // (overall median)
+            line: { color: '#2f7a34', width: 2 },
+            hoverinfo: 'skip'
+        };
+    }
+
+    const pointTrace = {
+        x: xSorted.map(ms => new Date(ms)),
+        y: ySorted,
+        type: 'scatter',
+        mode: 'markers',
+        name: 'Rounds',
+        marker: { size: 5, color: '#6389db', opacity: 0.6 },
+        text: textSorted,
+        hoverinfo: 'text'
+    };
+    
+    const monthMedianTrace = {
+        x: monthStarts.map(ms => new Date(ms)),
+        y: medians,
+        type: 'scatter',
+        mode: 'markers',
+        name: 'Monthly medians',
+        marker: { size: 8, color: '#f57c00', symbol: 'diamond' },
+        hoverinfo: 'y+x'
+    };
+
+    const metricName = metric === 'score' ? 'Score' : 'Score Difference';
+    const titleSuffix = country === 'world' ? 'Worldwide' : getCountryName(country);
+    const layout = {
+        title: `${metricName} over time — ${titleSuffix}`,
+        xaxis: { title: 'Date', type: 'date' },
+        yaxis: { 
+            title: metricName,
+            range: metric === 'score' ? [0, 5025] : [-5050, 5050],
+            dtick: 1000,
+            zeroline: true,
+            zerolinecolor: '#666',
+            zerolinewidth: 2
+        },
+        height: 500,
+        margin: { l: 50, r: 10, t: 50, b: 50 }
+    };
+    const data = trendTrace ? [pointTrace, trendTrace] : [pointTrace];
+    //data.push(monthMedianTrace); // for debugging
+    Plotly.newPlot('evolutionChart', data, layout, { responsive: true });
 }
