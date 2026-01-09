@@ -7,6 +7,7 @@ const app = express();
 const PORT = 3000;
 
 const BACKUPS_DUELS_DIR = path.join(__dirname, 'backups', 'duels');
+const { relayGetJSON } = require('./utils/geoguessrProxy');
 
 // Ensure backups directory exists at startup to avoid mkdir on every request
 fs.mkdir(BACKUPS_DUELS_DIR, { recursive: true }).catch(err => {
@@ -18,14 +19,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-// Mock profile and stats overview endpoints
-app.get('/api/mock/profile', (req, res) => {
-    // Some mock profile data
-});
 
-app.get('/api/mock/overview', (req, res) => {
-    // Some mock stats overview data
-});
+const BASE_URL_V3 = "https://www.geoguessr.com/api/v3";
+const BASE_URL_V4 = "https://www.geoguessr.com/api/v4";
+const BASE_URL_GAME_SERVER = "https://game-server.geoguessr.com/api";
 
 
 // Proxy endpoint for fetching game data
@@ -33,7 +30,6 @@ app.get('/api/duels/:token', async (req, res) => {
     const { token } = req.params;
     const ncfa_cookie = req.headers['x-ncfa-cookie'];
     const backupHeader = req.headers['x-backup'];
-    const BASE_URL_GAME_SERVER = "https://game-server.geoguessr.com/api";
     
     if (!ncfa_cookie) {
         return res.status(400).json({ error: 'Missing ncfa cookie' });
@@ -96,7 +92,6 @@ app.get('/api/duels/:token', async (req, res) => {
 // Proxy endpoint for fetching feed/private
 app.get('/api/feed/private', async (req, res) => {
     const ncfa_cookie = req.headers['x-ncfa-cookie'];
-    const BASE_URL_V4 = "https://www.geoguessr.com/api/v4";
     const paginationToken = req.query.paginationToken;
     
     if (!ncfa_cookie) {
@@ -108,22 +103,77 @@ app.get('/api/feed/private', async (req, res) => {
         if (paginationToken) {
             url.searchParams.append('paginationToken', paginationToken);
         }
-        
-        const response = await fetch(url, {
-            headers: {
-                'Cookie': `_ncfa=${ncfa_cookie}`
-            }
-        });
-        
-        if (!response.ok) {
-            return res.status(response.status).json({ error: 'Failed to fetch feed data' });
-        }
-        
-        const data = await response.json();
+        const data = await relayGetJSON(url, ncfa_cookie);
         res.json(data);
     } catch (error) {
         console.error('Error fetching feed data:', error);
-        res.status(500).json({ error: 'Internal server error', message: error.message });
+        res.status(error.status || 500).json({ error: 'Internal server error', message: error.message });
+    }
+});
+
+// Proxy endpoint for fetching profiles (v3)
+app.get('/api/profiles', async (req, res) => {
+    const ncfa_cookie = req.headers['x-ncfa-cookie'];
+
+    try {
+        const data = await relayGetJSON(`${BASE_URL_V3}/profiles/`, ncfa_cookie);
+        res.json(data);
+    } catch (error) {
+        console.error('Error fetching profiles:', error);
+        res.status(error.status || 500).json({ error: 'Internal server error', message: error.message });
+    }
+});
+
+// Proxy endpoint for fetching profiles stats (v3)
+app.get('/api/profiles/stats', async (req, res) => {
+    const ncfa_cookie = req.headers['x-ncfa-cookie'];
+
+    try {
+        const data = await relayGetJSON(`${BASE_URL_V3}/profiles/stats`, ncfa_cookie);
+        res.json(data);
+    } catch (error) {
+        console.error('Error fetching profiles stats:', error);
+        res.status(error.status || 500).json({ error: 'Internal server error', message: error.message });
+    }
+});
+
+// Proxy endpoint for fetching ranked team duels teams (v4)
+app.get('/api/ranked-team-duels/me/teams', async (req, res) => {
+    const ncfa_cookie = req.headers['x-ncfa-cookie'];
+
+    try {
+        const data = await relayGetJSON(`${BASE_URL_V4}/ranked-team-duels/me/teams`, ncfa_cookie);
+        res.json(data);
+    } catch (error) {
+        console.error('Error fetching ranked team duels teams:', error);
+        res.status(error.status || 500).json({ error: 'Internal server error', message: error.message });
+    }
+});
+
+// Proxy endpoint for fetching a specific ranked team (v4)
+app.get('/api/ranked-team-duels/me/teams/:teamId', async (req, res) => {
+    const ncfa_cookie = req.headers['x-ncfa-cookie'];
+    const { teamId } = req.params;
+
+    try {
+        const data = await relayGetJSON(`${BASE_URL_V4}/ranked-team-duels/me/teams/${teamId}`, ncfa_cookie);
+        res.json(data);
+    } catch (error) {
+        console.error('Error fetching ranked team details:', error);
+        res.status(error.status || 500).json({ error: 'Internal server error', message: error.message });
+    }
+});
+
+// Proxy endpoint for fetching ranked-system profile (v4)
+app.get('/api/ranked-system/me', async (req, res) => {
+    const ncfa_cookie = req.headers['x-ncfa-cookie'];
+
+    try {
+        const data = await relayGetJSON(`${BASE_URL_V4}/ranked-system/me`, ncfa_cookie);
+        res.json(data);
+    } catch (error) {
+        console.error('Error fetching ranked-system me:', error);
+        res.status(error.status || 500).json({ error: 'Internal server error', message: error.message });
     }
 });
 

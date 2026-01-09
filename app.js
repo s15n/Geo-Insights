@@ -1,5 +1,3 @@
-const BASE_URL = "http://localhost:3000"
-
 // TODO: remove hardcoding, offer selection after login
 let ownPlayerId = "";
 let teamMateId = "";
@@ -34,7 +32,9 @@ let stats = null;
 
 let countryData = {}; // Maps CLDR country code to {name, iso3166Alpha3}
 let profileSummary = null;
-let overviewStats = null;
+let teamDuelsStats = null;
+let duelsStats = null;
+let singleplayerStats = null;
 let selectedCategory = 'teamDuels';
 let selectedTeamId = null;
 let duelsScope = 'ranked'; // ranked | all
@@ -242,7 +242,7 @@ function refreshDisplays() {
 async function fetchGameTokens() {
     console.log("Fetching game tokens...");
     
-    const tokens = {
+    const tokensByType = {
         "singlePlayer": [],
         "soloDuels": [],
         "teamDuels": [],
@@ -254,7 +254,7 @@ async function fetchGameTokens() {
         
         while (true) {
             // TODO: Can see statistics of friends as well, using /friends instead of /private
-            const url = new URL(`${BASE_URL}/api/feed/private`);
+            const url = new URL("/api/feed/private");
             if (paginationToken) {
                 url.searchParams.append('paginationToken', paginationToken);
             }
@@ -292,14 +292,14 @@ async function fetchGameTokens() {
                         addEntries(payload);
                     } else if (entryType === 1) { // Singleplayer game
                         // mapSlug, mapName, points, gameToken, gameMode
-                        tokens.singlePlayer.push({
+                        tokensByType.singlePlayer.push({
                             token: payload.gameToken,
                             type: entryType,
                             mode: payload.gameMode,
                         });
                     } else if (entryType === 2) { // Challenge
                         // mapSlug, mapName, points, challengeToken, gameMode, isDailyChallenge
-                        tokens.singlePlayer.push({
+                        tokensByType.singlePlayer.push({
                             token: payload.challengeToken,
                             type: entryType,
                             mode: payload.gameMode,
@@ -307,12 +307,12 @@ async function fetchGameTokens() {
                         });
                     } else if (entryType === 6) { // Team duel
                         // gameId, gameMode, competitiveGameMode
-                        tokens.teamDuels.push(payload.gameId);
+                        tokensByType.teamDuels.push(payload.gameId);
                     } else {
                         // 4 = Achievement Unlocked
                         // 9 = Party Game: gameId, partyId, gameMode
                         // 11 = Unranked Duel: gameId, gameMode, competitiveGameMode
-                        tokens.otherGames.push({
+                        tokensByType.otherGames.push({
                             type: entryType,
                             payload: payload,
                         });
@@ -326,16 +326,37 @@ async function fetchGameTokens() {
                 break;
         }
         
-        console.log(`Fetched ${tokens.length} game tokens`);
+        // Combine all tokens into a single array
+        const allTokens = [
+            ...tokensByType.singlePlayer,
+            ...tokensByType.soloDuels,
+            ...tokensByType.teamDuels.map(gameId => ({ gameId, type: 6 })), // Normalize teamDuels to objects
+            ...tokensByType.otherGames,
+        ];
+        
+        console.log(`Fetched ${allTokens.length} total game tokens:`, {
+            singlePlayer: tokensByType.singlePlayer.length,
+            soloDuels: tokensByType.soloDuels.length,
+            teamDuels: tokensByType.teamDuels.length,
+            otherGames: tokensByType.otherGames.length,
+        });
+        console.log('All tokens data:', allTokens);
+        return allTokens;
     } catch (error) {
         console.error('Error fetching game tokens:', error);
     }
     try {
-        backupFetchedGameTokens(tokens);
+        backupFetchedGameTokens(tokensByType);
     } catch (e) {
         console.warn('Error backing up tokens:', e);
     }
-    return tokens;
+    // Return empty combined list on error
+    return [
+        ...tokensByType.singlePlayer,
+        ...tokensByType.soloDuels,
+        ...tokensByType.teamDuels.map(gameId => ({ gameId, type: 6 })),
+        ...tokensByType.otherGames,
+    ];
 }
 
 // Backup fetched game tokens in browser localStorage for recovery
@@ -419,7 +440,7 @@ async function getStats(gameTokens, numberOfGames) {
                 'x-ncfa-cookie': ncfaCookie
             };
             if (isBackupEnabled()) duelHeaders['x-backup'] = '1';
-            const response = await fetch(`${BASE_URL}/api/duels/${token}`, {
+            const response = await fetch(`/api/duels/${token}`, {
                 headers: duelHeaders
             });
             const game = await response.json();
@@ -592,13 +613,25 @@ const loadSavedStats = true;
 
 (async () => {
     if (loadSavedTokens) {
-        game_tokens = await fetch('tokens.json').then(res => res.json());
-        game_tokens = game_tokens.teamDuels; // TODO
-        console.log(game_tokens.length, "game tokens loaded");
+        const tokenData = await fetch('tokens.json').then(res => res.json());
+        // Combine all tokens from the saved file
+        game_tokens = [
+            ...(tokenData.singlePlayer || []),
+            ...(tokenData.soloDuels || []),
+            ...(tokenData.teamDuels || []).map(gameId => typeof gameId === 'string' ? { gameId, type: 6 } : gameId),
+            ...(tokenData.otherGames || []),
+        ];
+        console.log(`${game_tokens.length} total game tokens loaded from file:`, {
+            singlePlayer: (tokenData.singlePlayer || []).length,
+            soloDuels: (tokenData.soloDuels || []).length,
+            teamDuels: (tokenData.teamDuels || []).length,
+            otherGames: (tokenData.otherGames || []).length,
+        });
+        console.log('Combined token data:', game_tokens);
     } else {
         game_tokens = await fetchGameTokens();
-        game_tokens = game_tokens.teamDuels; // TODO
-        console.log('Game tokens fetched:', game_tokens);
+        console.log(`Total game tokens fetched: ${game_tokens.length}`);
+        console.log('Game tokens data:', game_tokens);
     }
 
     countryData = await fetch('countries.json').then(res => res.json());
@@ -647,31 +680,80 @@ function calculateMedian(values) {
 }
 
 async function loadMenuData() {
+    // 1) Load profile first and render immediately
     try {
-        const [profile, overview] = await Promise.all([
-            fetch('/api/mock/profile').then(r => r.json()),
-            fetch('/api/mock/overview').then(r => r.json())
-        ]);
-        profileSummary = profile;
-        overviewStats = overview;
+        const profileResponse = await fetch("/api/profiles", {
+            headers: {
+                'x-ncfa-cookie': ncfaCookie
+            }
+        });
+        if (!profileResponse.ok) {
+            throw new Error(`API request failed with status ${profileResponse.status}`);
+        }
+        const profile = await profileResponse.json();
+
+        profileSummary = {
+            userId: profile.user.id,
+            name: profile.user.nick,
+            level: profile.user.progress.level,
+            countryCode: profile.user.countryCode,
+        };
         if (profileSummary?.userId) {
             ownPlayerId = profileSummary.userId;
             persistValue(LS_KEYS.ownPlayerId, ownPlayerId);
         }
-
-        selectedTeamId = overviewStats?.teamDuels?.defaultTeamId || overviewStats?.teamDuels?.teams?.[0]?.id || selectedTeamId;
-        if (selectedTeamId) persistValue(LS_KEYS.selectedTeamId, selectedTeamId);
-        if (!teamMateId && selectedTeamId) {
-            const t = overviewStats?.teamDuels?.teams?.find(team => team.id === selectedTeamId);
-            if (t?.mateId) {
-                teamMateId = t.mateId;
-                persistValue(LS_KEYS.teamMateId, teamMateId);
-            }
-        }
         renderMenuBar();
     } catch (e) {
-        console.warn('Failed to load menu data', e);
+        console.warn('Failed to load profile data', e);
     }
+
+    // 2) Load overview asynchronously afterwards and re-render when ready
+    (async () => {
+       try {
+            const teamsResponse = await fetch("/api/ranked-team-duels/me/teams", {
+                headers: {
+                    'x-ncfa-cookie': ncfaCookie
+                }
+            });
+            if (!teamsResponse.ok) {
+                throw new Error(`API request failed with status ${teamsResponse.status}`);
+            }
+            const teamsData = await teamsResponse.json();
+
+            const teamsRaw = teamsData.teams || [];
+            const teams = teamsRaw.map(t => ({
+                id: t.teamId, // is this even useful?
+                name: t.teamName,
+                mateId: t.members.find(m => m.userId !== ownPlayerId)?.userId || null,
+                contryCodes: t.members.map(m => m.countryCode),
+                gamesWon: t.gamesWon,
+                gamesPlayed: t.gamesPlayed,
+                latestGamePlayedAt: t.latestGamePlayedAt,
+            }));
+            // sort teams by latestGamePlayedAt desc
+            teams.sort((a, b) => {
+                const dateA = new Date(a.latestGamePlayedAt);
+                const dateB = new Date(b.latestGamePlayedAt);
+                return dateB - dateA;
+            });
+
+            teamDuelsStats = { teams };
+
+            selectedTeamId = teams[0]?.id || selectedTeamId;
+            if (selectedTeamId) 
+                persistValue(LS_KEYS.selectedTeamId, selectedTeamId);
+            if (!teamMateId && selectedTeamId) {
+                const t = teamDuelsStats?.teams?.find(team => team.id === selectedTeamId);
+                if (t?.mateId) {
+                    teamMateId = t.mateId;
+                    persistValue(LS_KEYS.teamMateId, teamMateId);
+                }
+            }
+            renderMenuBar();
+        } catch (e) {
+            console.warn('Failed to load team duel data', e);
+        }
+    })();
 }
 
 function ensureDefaultEvolutionCountry() {
@@ -745,7 +827,7 @@ function formatWinRate(rate) {
     return `${Math.round(rate * 1000) / 10}%`;
 }
 
-function renderMenuBar() {
+async function renderMenuBar() {
     const profileEl = document.getElementById('profileSummary');
     const cardsEl = document.getElementById('modeCards');
     if (!profileEl || !cardsEl) return;
@@ -766,8 +848,8 @@ function renderMenuBar() {
 
     cardsEl.innerHTML = '';
     const cardData = [];
-    if (overviewStats?.duels) {
-        const d = overviewStats.duels;
+    if (duelsStats) {
+        const d = duelsStats;
         cardData.push({
             id: 'duels',
             title: 'Duels',
@@ -804,18 +886,56 @@ function renderMenuBar() {
         });
     }
 
-    if (overviewStats?.teamDuels) {
-        const t = overviewStats.teamDuels;
+    if (teamDuelsStats) {
+        const t = teamDuelsStats;
         const selectedTeam = t.teams?.find(team => team.id === selectedTeamId) || t.teams?.[0];
+
+        const teamStats = {
+            divisionId: null,
+            division: null,
+            rating: null,
+            games: selectedTeam?.gamesPlayed,
+            winRate: selectedTeam && selectedTeam.gamesPlayed > 0 ? selectedTeam.gamesWon / selectedTeam.gamesPlayed : null,
+        };
+        
+        // TODO: fetch this from https://www.geoguessr.com/api/v4/ranked-team-duels/divisions ?
+        const DIVISION_DATA = {
+            "1": "Champion",
+            "2": "Master I",
+            "3": "Master II",
+            "4": "Gold I",
+            "5": "Gold II",
+            "6": "Gold III",
+            "7": "Silver I",
+            "8": "Silver II",
+            "9": "Silver III",
+            "10": "Bronze",
+        }
+
+        if (selectedTeam) {
+            const teamsResponse = await fetch(`/api/ranked-team-duels/me/teams/${selectedTeam.mateId}`, {
+                headers: {
+                    'x-ncfa-cookie': ncfaCookie
+                }
+            });
+            if (!teamsResponse.ok) {
+                throw new Error(`API request failed with status ${teamsResponse.status}`);
+            }
+            const teamsData = await teamsResponse.json();
+
+            teamStats.divisionId = teamsData.divisionNumber;
+            teamStats.division = DIVISION_DATA[teamsData.divisionNumber] || '—';
+            teamStats.rating = teamsData.rating;
+        }
+
         cardData.push({
             id: 'teamDuels',
             title: 'Team Duels',
             rows: [
-                ['Division', selectedTeam?.division || '—'],
-                ['Rating', selectedTeam?.rating != null ? selectedTeam.rating : '—'],
-                ['Best', selectedTeam?.bestRating != null ? selectedTeam.bestRating : '—'],
-                ['Games', selectedTeam?.games != null ? selectedTeam.games : '—'],
-                ['Win rate', formatWinRate(selectedTeam?.winRate)]
+                ['Division', teamStats.division || '—'],
+                ['Rating', teamStats.rating != null ? teamStats.rating : '—'],
+                ['Games', teamStats.games != null ? teamStats.games : '—'],
+                ['Win rate', formatWinRate(teamStats.winRate)]
             ],
             controls: () => {
                 const wrap = document.createElement('div');
@@ -833,6 +953,18 @@ function renderMenuBar() {
                         opt.selected = true;
                     select.appendChild(opt);
                 });
+
+                // TODO: make these options work
+                const allRankedOpt = new Option("All Ranked Games", 'all-ranked');
+                allRankedOpt.addEventListener('click', (e) => e.stopPropagation());
+                if (!selectedTeamId) 
+                    allRankedOpt.selected = true;
+                select.appendChild(allRankedOpt);
+
+                const allOpt = new Option("All Games", 'all-games');
+                allOpt.addEventListener('click', (e) => e.stopPropagation());
+                select.appendChild(allOpt);
+
                 select.addEventListener('click', (e) => e.stopPropagation());
                 select.onchange = async (e) => {
                     selectedTeamId = e.target.value;
@@ -852,10 +984,10 @@ function renderMenuBar() {
                 return wrap;
             }
         });
-    }
+    };
 
-    if (overviewStats?.singleplayer) {
-        const s = overviewStats.singleplayer;
+    if (singleplayerStats) {
+        const s = singleplayerStats;
         cardData.push({
             id: 'singleplayer',
             title: 'Singleplayer',
