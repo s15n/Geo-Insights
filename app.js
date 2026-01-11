@@ -252,14 +252,15 @@ async function fetchGameTokens() {
     try {
         let paginationToken = null;
         
+        let pageIndex = 1;
         while (true) {
             // TODO: Can see statistics of friends as well, using /friends instead of /private
-            const url = new URL("/api/feed/private");
+            /*const url = new URL("/api/feed/private");
             if (paginationToken) {
                 url.searchParams.append('paginationToken', paginationToken);
-            }
+            }*/
             
-            const response = await fetch(url, {
+            const response = await fetch(`/api/feed/private${paginationToken ? `?paginationToken=${encodeURIComponent(paginationToken)}` : ''}`, {
                 headers: {
                     'x-ncfa-cookie': ncfaCookie
                 }
@@ -305,9 +306,15 @@ async function fetchGameTokens() {
                             mode: payload.gameMode,
                             dailyChallenge: payload.isDailyChallenge || false,
                         });
-                    } else if (entryType === 6) { // Team duel
+                    } else if (entryType === 6) { // Competitive Duel
                         // gameId, gameMode, competitiveGameMode
-                        tokensByType.teamDuels.push(payload.gameId);
+                        if (payload.gameMode === "Duels") {
+                            tokensByType.soloDuels.push(payload.gameId);
+                        } else if (payload.gameMode === "TeamDuels") {
+                            tokensByType.teamDuels.push(payload.gameId);
+                        } else {
+                            console.warn('Unknown duel game mode:', payload.gameMode, entry);
+                        }
                     } else {
                         // 4 = Achievement Unlocked
                         // 9 = Party Game: gameId, partyId, gameMode
@@ -320,56 +327,66 @@ async function fetchGameTokens() {
                 }
             }
             addEntries(data.entries);
+            console.log(`Page ${pageIndex}: Fetched ${data.entries.length} entries, total so far:`)
             
             paginationToken = data.paginationToken;
             if (!paginationToken)
                 break;
+            pageIndex++;
         }
-        
-        // Combine all tokens into a single array
-        const allTokens = [
-            ...tokensByType.singlePlayer,
-            ...tokensByType.soloDuels,
-            ...tokensByType.teamDuels.map(gameId => ({ gameId, type: 6 })), // Normalize teamDuels to objects
-            ...tokensByType.otherGames,
-        ];
-        
-        console.log(`Fetched ${allTokens.length} total game tokens:`, {
-            singlePlayer: tokensByType.singlePlayer.length,
-            soloDuels: tokensByType.soloDuels.length,
-            teamDuels: tokensByType.teamDuels.length,
-            otherGames: tokensByType.otherGames.length,
-        });
-        console.log('All tokens data:', allTokens);
-        return allTokens;
     } catch (error) {
         console.error('Error fetching game tokens:', error);
     }
+
     try {
         backupFetchedGameTokens(tokensByType);
     } catch (e) {
         console.warn('Error backing up tokens:', e);
     }
     // Return empty combined list on error
-    return [
-        ...tokensByType.singlePlayer,
-        ...tokensByType.soloDuels,
-        ...tokensByType.teamDuels.map(gameId => ({ gameId, type: 6 })),
-        ...tokensByType.otherGames,
-    ];
+    return tokensByType;
 }
 
 // Backup fetched game tokens in browser localStorage for recovery
 function backupFetchedGameTokens(tokens) {
     try {
+        console.log('Backing up game tokens to localStorage');
+        
+        console.log("Loading existing backup tokens from localStorage");
+        let existingBackup = localStorage.getItem('backup_game_tokens');
+        if (existingBackup) {
+            existingBackup = JSON.parse(existingBackup);
+            console.log("Existing backup found:", existingBackup);
+        } else {
+            console.log("No existing backup found.");
+        }
+
+        if (existingBackup) {
+            console.log("Merging with existing backup tokens");
+            // Merge existing backup with new tokens
+            for (const key of Object.keys(tokens)) {
+                if (Array.isArray(existingBackup[key])) {
+                    const existingTokensSet = new Set(existingBackup[key].map(t => typeof t === 'object' ? JSON.stringify(t) : t));
+                    for (const token of tokens[key]) {
+                        const tokenKey = typeof token === 'object' ? JSON.stringify(token) : token;
+                        if (!existingTokensSet.has(tokenKey)) {
+                            existingBackup[key].push(token);
+                            existingTokensSet.add(tokenKey);
+                        }
+                    }
+                    tokens[key] = existingBackup[key];
+                }
+            }
+        }
+
         localStorage.setItem('backup_game_tokens', JSON.stringify(tokens));
     } catch (err) {
-        console.warn('Failed to backup fetched game tokens to localStorage', err);
+        console.warn('Failed to backup game tokens to localStorage', err);
     }
 }
 
-async function processGameTokens(game_tokens) {
-    stats = await getStats(game_tokens, game_tokens.length);
+async function processGameTokens() {
+    stats = await getStats();
     return stats;
 }
 
@@ -424,16 +441,31 @@ function createEmptyStats() {
     };
 }
 
-async function getStats(gameTokens, numberOfGames) {
+async function getStats(numberOfGames) {
     const stats = initializeStats();
 
+    let tokens = [];
+    // select token set based on selected category
+    if (selectedCategory === 'soloDuels') {
+        tokens = game_tokens.soloDuels;
+    } else if (selectedCategory === 'teamDuels') {
+        tokens = game_tokens.teamDuels;
+    } else if (selectedCategory === 'singlePlayer') {
+        tokens = game_tokens.singlePlayer.map(t => t.token);
+    } else {
+        return stats; // unsupported category
+    }
+
     console.log("Starting to process game tokens...");
-    console.log(Math.min(numberOfGames, gameTokens.length));
-    numberOfGames = Math.min(numberOfGames, gameTokens.length);
+    if (!numberOfGames || numberOfGames <= 0) {
+        numberOfGames = tokens.length;
+    }
+    console.log(Math.min(numberOfGames, tokens.length));
+    numberOfGames = Math.min(numberOfGames, tokens.length);
     
     for (let i = 0; i < numberOfGames; i++) {
         try {
-            const token = gameTokens[i];
+            const token = tokens[i];
             console.log(`Processing token: (${i}/${numberOfGames})`, token);
             
             const duelHeaders = {
@@ -469,7 +501,7 @@ async function getStats(gameTokens, numberOfGames) {
 
             const hasSelectedTeamMate = ownTeam.players.findIndex(player => player.playerId === teamMateId) !== -1;
             if (!hasSelectedTeamMate) {
-                console.warn(`Team mate not found in own team for game ${token}`);
+                console.warn(`Team mate (${teamMateId}) not found in own team for game ${token}`);
                 continue;
             }
 
@@ -609,28 +641,16 @@ function getGameMode(game) {
 }
 
 const loadSavedTokens = true;
-const loadSavedStats = true;
+const loadSavedStats = false;
 
 (async () => {
     if (loadSavedTokens) {
         const tokenData = await fetch('tokens.json').then(res => res.json());
-        // Combine all tokens from the saved file
-        game_tokens = [
-            ...(tokenData.singlePlayer || []),
-            ...(tokenData.soloDuels || []),
-            ...(tokenData.teamDuels || []).map(gameId => typeof gameId === 'string' ? { gameId, type: 6 } : gameId),
-            ...(tokenData.otherGames || []),
-        ];
-        console.log(`${game_tokens.length} total game tokens loaded from file:`, {
-            singlePlayer: (tokenData.singlePlayer || []).length,
-            soloDuels: (tokenData.soloDuels || []).length,
-            teamDuels: (tokenData.teamDuels || []).length,
-            otherGames: (tokenData.otherGames || []).length,
-        });
-        console.log('Combined token data:', game_tokens);
+        console.log("Loaded saved game tokens:", tokenData);
+        game_tokens = tokenData;
     } else {
         game_tokens = await fetchGameTokens();
-        console.log(`Total game tokens fetched: ${game_tokens.length}`);
+        console.log(`Total game tokens fetched: ${game_tokens.soloDuels.length + game_tokens.teamDuels.length + game_tokens.singlePlayer.length + game_tokens.otherGames.length}`);
         console.log('Game tokens data:', game_tokens);
     }
 
@@ -643,7 +663,7 @@ const loadSavedStats = true;
         stats = await fetch('stats.json').then(res => res.json());
         console.log('Data loaded from save:', stats);
     } else {
-        stats = await processGameTokens(game_tokens);
+        stats = await processGameTokens();
         console.log('Data loaded:', stats);
     }
     
