@@ -89,6 +89,8 @@ app.get('/api/duels/:token', async (req, res) => {
     }
 });
 
+// TODO: backup tokens
+
 // Proxy endpoint for fetching feed/private
 app.get('/api/feed/private', async (req, res) => {
     const ncfa_cookie = req.headers['x-ncfa-cookie'];

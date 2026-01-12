@@ -24,6 +24,21 @@ function isBackupEnabled() {
     return localStorage.getItem('enable_duel_backup') === '1';
 }
 
+        
+// TODO: fetch this from https://www.geoguessr.com/api/v4/ranked-team-duels/divisions ?
+const DIVISION_DATA = {
+    "1": "Champion",
+    "2": "Master I",
+    "3": "Master II",
+    "4": "Gold I",
+    "5": "Gold II",
+    "6": "Gold III",
+    "7": "Silver I",
+    "8": "Silver II",
+    "9": "Silver III",
+    "10": "Bronze",
+}
+
 // Current mode state
 let currentMode = 'moving';
 
@@ -466,14 +481,15 @@ async function getStats(numberOfGames) {
     for (let i = 0; i < numberOfGames; i++) {
         try {
             const token = tokens[i];
-            console.log(`Processing token: (${i}/${numberOfGames})`, token);
+            console.log(`Processing token: (${i + 1}/${numberOfGames})`, token);
             
-            const duelHeaders = {
+            const requestHeaders = {
                 'x-ncfa-cookie': ncfaCookie
             };
-            if (isBackupEnabled()) duelHeaders['x-backup'] = '1';
+            if (isBackupEnabled()) 
+                requestHeaders['x-backup'] = '1';
             const response = await fetch(`/api/duels/${token}`, {
-                headers: duelHeaders
+                headers: requestHeaders
             });
             const game = await response.json();
             console.log(game);
@@ -484,11 +500,15 @@ async function getStats(numberOfGames) {
             /*
             Not needed for now
             const ranked = game.options.isRated; // should always be true
-            const isTeamDuels = game.options.isTeamDuels; // should always be true
             const initialHealth = game.options.initialHealth; // should always be 6000
             */
+           
+            const isTeamDuels = game.options.isTeamDuels; // should always be the expected value
+            if (isTeamDuels !== (selectedCategory === 'teamDuels')) {
+                console.warn(`Game ${token} isTeamDuels=${isTeamDuels} but selected category is ${selectedCategory}, skipping`);
+                continue;
+            }
 
-            // TODO: select by team instead of player ID
             const ownTeamIndex = game.teams.findIndex(team => team.players.some(player => player.playerId === ownPlayerId));
 
             if (ownTeamIndex !== 0 && ownTeamIndex !== 1) {
@@ -499,10 +519,13 @@ async function getStats(numberOfGames) {
             const ownTeam = game.teams[ownTeamIndex];
             const opponentTeam = game.teams[1 - ownTeamIndex];
 
-            const hasSelectedTeamMate = ownTeam.players.findIndex(player => player.playerId === teamMateId) !== -1;
-            if (!hasSelectedTeamMate) {
-                console.warn(`Team mate (${teamMateId}) not found in own team for game ${token}`);
-                continue;
+            // For team duels, check if teammate is in the game
+            if (isTeamDuels && teamMateId) {
+                const hasSelectedTeamMate = ownTeam.players.findIndex(player => player.playerId === teamMateId) !== -1;
+                if (!hasSelectedTeamMate) {
+                    console.warn(`Team mate (${teamMateId}) not found in own team for game ${token}`);
+                    continue;
+                }
             }
 
             const ownResults = ownTeam.roundResults;
@@ -561,11 +584,17 @@ async function getStats(numberOfGames) {
                 const roundStartTime = new Date(roundInfo.startTime);
                 const roundFirstGuessTime = roundInfo.timerStartTime;
 
+                let guessedFirst;
                 let guess1Time = ownTeam.players[0].guesses[round]?.created;
-                let guess2Time = ownTeam.players[1].guesses[round]?.created;
-                const guessedFirst = guess1Time === roundFirstGuessTime || guess2Time === roundFirstGuessTime;
+                let guess2Time = null;
+                if (isTeamDuels) {
+                    guess2Time = ownTeam.players[1].guesses[round]?.created;
+                    guessedFirst = guess1Time === roundFirstGuessTime || guess2Time === roundFirstGuessTime;
+                    guess2Time = guess2Time ? new Date(guess2Time) : null;
+                } else {
+                    guessedFirst = guess1Time === roundFirstGuessTime;
+                }
                 guess1Time = guess1Time ? new Date(guess1Time) : null;
-                guess2Time = guess2Time ? new Date(guess2Time) : null;
 
                 const ownResult = ownResults[round];
                 const opponentResult = opponentResults[round];
@@ -619,7 +648,7 @@ async function getStats(numberOfGames) {
                 round++;
             }
         } catch (error) {
-            console.error(`Error processing token ${gameTokens[i]}:`, error);
+            console.error(`Error processing token ${tokens[i]}:`, error);
         }
     }
     
@@ -640,7 +669,7 @@ function getGameMode(game) {
     return 'custom'; // TODO
 }
 
-const loadSavedTokens = true;
+const loadSavedTokens = false;
 const loadSavedStats = false;
 
 (async () => {
@@ -728,6 +757,36 @@ async function loadMenuData() {
     }
 
     // 2) Load overview asynchronously afterwards and re-render when ready
+    (async () => {
+        try {
+            const rankedSystemResponse = await fetch("/api/ranked-system/me", {
+                headers: {
+                    'x-ncfa-cookie': ncfaCookie
+                }
+            });
+            if (!rankedSystemResponse.ok) {
+                throw new Error(`API request failed with status ${rankedSystemResponse.ok}`);
+            }
+            const rankedSystemData = await rankedSystemResponse.json();
+
+            duelsStats = {
+                divisionId: rankedSystemData.divisionNumber,
+                division: DIVISION_DATA[rankedSystemData.divisionNumber] || '—',
+                rating: rankedSystemData.rating,
+                modeRatings: {
+                    moving: rankedSystemData.gameModeRatings.standardDuels.rating,
+                    noMove: rankedSystemData.gameModeRatings.noMoveDuels.rating,
+                    nmpz: rankedSystemData.gameModeRatings.nmpzDuels.rating,
+                },
+                games: null, // TODO: from /stats/me
+                winRate: null,
+            };
+            renderMenuBar();
+        } catch (e) {
+            console.warn('Failed to load solo duels data', e);
+        }
+    })();
+
     (async () => {
        try {
             const teamsResponse = await fetch("/api/ranked-team-duels/me/teams", {
@@ -866,21 +925,28 @@ async function renderMenuBar() {
         profileEl.textContent = 'Loading profile...';
     }
 
+    const modeNames = {
+        'moving': 'Moving',
+        'noMove': 'No Move',
+        'nmpz': 'NMPZ'
+    };
+
     cardsEl.innerHTML = '';
     const cardData = [];
     if (duelsStats) {
         const d = duelsStats;
         cardData.push({
-            id: 'duels',
+            id: 'soloDuels',
             title: 'Duels',
             rows: [
                 ['Division', d.division || '—'],
                 ['Rating', d.rating != null ? d.rating : '—'],
-                ['Best', d.bestRating != null ? d.bestRating : '—'],
+                // mode rating
+                [`${modeNames[currentMode]} Rating`, d.modeRatings[currentMode] ?? '—'],
                 ['Games', d.games != null ? d.games : '—'],
-                ['Win rate', formatWinRate(d.winRate)]
+                ['Win Rate', formatWinRate(d.winRate)]
             ],
-            controls: (card) => {
+            controls: () => {
                 const wrap = document.createElement('div');
                 wrap.className = 'controls';
                 if (selectedCategory !== 'duels') {
@@ -917,20 +983,6 @@ async function renderMenuBar() {
             games: selectedTeam?.gamesPlayed,
             winRate: selectedTeam && selectedTeam.gamesPlayed > 0 ? selectedTeam.gamesWon / selectedTeam.gamesPlayed : null,
         };
-        
-        // TODO: fetch this from https://www.geoguessr.com/api/v4/ranked-team-duels/divisions ?
-        const DIVISION_DATA = {
-            "1": "Champion",
-            "2": "Master I",
-            "3": "Master II",
-            "4": "Gold I",
-            "5": "Gold II",
-            "6": "Gold III",
-            "7": "Silver I",
-            "8": "Silver II",
-            "9": "Silver III",
-            "10": "Bronze",
-        }
 
         if (selectedTeam) {
             const teamsResponse = await fetch(`/api/ranked-team-duels/me/teams/${selectedTeam.mateId}`, {
@@ -955,7 +1007,7 @@ async function renderMenuBar() {
                 ['Division', teamStats.division || '—'],
                 ['Rating', teamStats.rating != null ? teamStats.rating : '—'],
                 ['Games', teamStats.games != null ? teamStats.games : '—'],
-                ['Win rate', formatWinRate(teamStats.winRate)]
+                ['Win Rate', formatWinRate(teamStats.winRate)]
             ],
             controls: () => {
                 const wrap = document.createElement('div');
@@ -1022,11 +1074,13 @@ async function renderMenuBar() {
         const el = document.createElement('div');
         el.className = `mode-card ${selectedCategory === card.id ? 'active' : ''}`;
         el.onclick = async () => {
-            selectedCategory = card.id;
-            persistValue(LS_KEYS.selectedCategory, selectedCategory);
-            renderMenuBar();
-            if (card.id === 'teamDuels') {
-                // Already handled via dropdown change if needed
+            if (selectedCategory !== card.id) {
+                selectedCategory = card.id;
+                persistValue(LS_KEYS.selectedCategory, selectedCategory);
+                renderMenuBar();
+                statsContentLoading('Recomputing stats for selected category...');
+                stats = await processGameTokens();
+                refreshDisplays();
             }
         };
         const title = document.createElement('div');
@@ -1318,7 +1372,7 @@ function displayPerformanceMap() {
         })),
         hovertemplate:
             '<span style="font-family: \'Twemoji Country Flags\', \'Apple Color Emoji\', sans-serif;">%{customdata.flag}</span> %{customdata.name}<br>' +
-            `${metricTitle}: %{customdata.value}<br>` +
+            `${isRate ? "" : "Median "}${metricTitle}: %{customdata.value}<br>` +
             'Locations: %{customdata.count}' +
             '<extra></extra>',
         hoverinfo: 'text',
