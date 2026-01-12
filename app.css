@@ -4,6 +4,7 @@ body {
     margin: 0 auto;
     padding: 20px;
     background-color: #f5f5f5;
+    margin-bottom: 50px;
 }
 
 h1 {
@@ -293,4 +294,115 @@ h1 {
 
 #evolution-country-select {
     font-family: 'Twemoji Country Flags', 'Apple Color Emoji', sans-serif;
+}
+
+/* Bottom timeline selector */
+.time-selector {
+    position: fixed;
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+    width: min(1100px, 92vw);
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 12px 14px 10px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    z-index: 1200;
+    backdrop-filter: blur(4px);
+}
+
+.time-selector__header {
+    font-weight: 700;
+    font-size: 13px;
+    color: #333;
+}
+
+.time-selector__timeline {
+    position: relative;
+    height: 28px;
+    margin: 8px 0 6px;
+}
+
+.time-selector__track {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 4px;
+    background: #e5e5e5;
+    border-radius: 999px;
+    transform: translateY(-50%);
+}
+
+.time-selector__selection {
+    position: absolute;
+    top: 50%;
+    height: 6px;
+    background: #4caf50;
+    border-radius: 999px;
+    transform: translateY(-50%);
+    opacity: 0.28;
+}
+
+.time-selector__dots {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 8px;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.time-selector__dot {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #2f7a34;
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.14);
+    transform: translateX(-50%);
+}
+
+.time-selector__handle {
+    position: absolute;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2px solid #4caf50;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transform: translate(-50%, -50%);
+    cursor: grab;
+    transition: box-shadow 0.12s ease, transform 0.12s ease;
+    z-index: 2;
+}
+
+.time-selector__handle:active {
+    cursor: grabbing;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+    transform: translate(-50%, -50%) scale(1.02);
+}
+
+.time-selector__labels {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: #444;
+}
+
+.time-selector__label-range {
+    flex: 1;
+    text-align: center;
+    color: #666;
+    min-width: 140px;
+}
+
+.time-selector--empty {
+    opacity: 0.7;
 }

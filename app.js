@@ -54,6 +54,11 @@ let selectedCategory = 'teamDuels';
 let selectedTeamId = null;
 let duelsScope = 'ranked'; // ranked | all
 let selectedEvolutionCountry = null; // 'world' or CLDR code
+// Global timeframe selection for the bottom timeline (ms since epoch)
+const timelineSelection = {
+    startMs: null,
+    endMs: null
+};
 
 function persistValue(key, value) {
     try {
@@ -85,7 +90,9 @@ const LS_KEYS = {
     metric_boxplot: 'ls_metric_boxplot',
     metric_countrylist: 'ls_metric_countrylist',
     metric_evolution: 'ls_metric_evolution',
-    evolution_country: 'ls_evolution_country'
+    evolution_country: 'ls_evolution_country',
+    timeframeStart: 'ls_timeframeStart',
+    timeframeEnd: 'ls_timeframeEnd'
 };
 
 function loadPersistedState() {
@@ -103,6 +110,14 @@ function loadPersistedState() {
     if (storedMode) currentMode = storedMode;
     const storedEvoCountry = loadPersistedValue(LS_KEYS.evolution_country);
     if (storedEvoCountry) selectedEvolutionCountry = storedEvoCountry;
+    const storedTimeframeStart = loadPersistedValue(LS_KEYS.timeframeStart);
+    if (storedTimeframeStart) timelineSelection.startMs = storedTimeframeStart;
+    const storedTimeframeEnd = loadPersistedValue(LS_KEYS.timeframeEnd);
+    if (storedTimeframeEnd === 'latest') {
+        timelineSelection.endMs = null;
+    } else if (storedTimeframeEnd) {
+        timelineSelection.endMs = storedTimeframeEnd;
+    }
 }
 
 loadPersistedState();
@@ -216,6 +231,73 @@ document.addEventListener('DOMContentLoaded', () => {
     createMetricSelector('.stats-container:nth-of-type(5)', 'countrylist-metric-select', true);
 });
 
+let currentGamesInRange = null;
+let cachedFilteredData = null;
+let timeframeDebounceTimer = null;
+
+function refreshTimeframe(gamesInRange) {
+    if (gamesInRange && currentGamesInRange === gamesInRange) {
+        return; // No change
+    }
+    currentGamesInRange = gamesInRange;
+
+    // Clear existing debounce timer
+    if (timeframeDebounceTimer) {
+        clearTimeout(timeframeDebounceTimer);
+    }
+
+    // Set new debounce timer
+    timeframeDebounceTimer = setTimeout(() => {
+        cachedFilteredData = getFilteredGameData(true);
+        console.log('Timeframe updated:', timelineSelection.startMs, timelineSelection.endMs);
+        refreshDisplays();
+        timeframeDebounceTimer = null;
+    }, 100);
+}
+
+/**
+ * Filter games and rounds by the selected timeframe (timelineSelection)
+ * Returns {games, rounds, gameIndexMap} where gameIndexMap maps old indices to new indices
+ */
+function getFilteredGameData(recalculate = false) {
+    if (cachedFilteredData && !recalculate) {
+        return cachedFilteredData;
+    }
+
+    if (!timelineSelection || !timelineSelection.startMs || !timelineSelection.endMs) {
+        return { games: stats[currentMode].games, rounds: stats[currentMode].rounds, gameIndexMap: null };
+    }
+
+    if (!stats || !stats[currentMode] || !stats[currentMode].games) {
+        return { games: [], rounds: [], gameIndexMap: {} };
+    }
+
+    const allGames = stats[currentMode].games;
+    const allRounds = stats[currentMode].rounds;
+    const { startMs, endMs } = timelineSelection;
+
+    // Filter games by timeframe
+    const gameIndexMap = {}; // maps old index to new index
+    const filteredGames = [];
+    allGames.forEach((game, oldIdx) => {
+        if (!game || !game.startTime) return;
+        const time = new Date(game.startTime).getTime();
+        if (time >= startMs && time <= endMs) {
+            gameIndexMap[oldIdx] = filteredGames.length;
+            filteredGames.push(game);
+        }
+    });
+
+    // Filter rounds by included games
+    const filteredRounds = allRounds.filter(round => {
+        const gameIdx = round.game;
+        return gameIndexMap.hasOwnProperty(gameIdx);
+    });
+
+    console.log(`Filtered data: ${filteredGames.length} games, ${filteredRounds.length} rounds within timeframe ${new Date(startMs).toISOString()} - ${new Date(endMs).toISOString()}`);
+    return { games: filteredGames, rounds: filteredRounds, gameIndexMap };
+}
+
 function refreshDisplays() {
     // Update title
     const listTitle = document.getElementById('listTitle');
@@ -252,6 +334,7 @@ function refreshDisplays() {
     renderEvolutionControls();
     displayEvolutionGraph();
     displayStatsAsList();
+    renderTimeSelector();
 }
 
 async function fetchGameTokens() {
@@ -901,6 +984,167 @@ function renderEvolutionControls() {
     wrap.appendChild(select);
 }
 
+function ensureTimeSelectorContainer() {
+    let wrap = document.getElementById('timeSelector');
+    if (wrap) return wrap;
+
+    wrap = document.createElement('div');
+    wrap.id = 'timeSelector';
+    wrap.className = 'time-selector';
+    wrap.innerHTML = `
+        <div class="time-selector__header">Timeframe</div>
+        <div class="time-selector__timeline">
+            <div class="time-selector__track"></div>
+            <div class="time-selector__selection"></div>
+            <div class="time-selector__dots"></div>
+            <div class="time-selector__handle start" title="Drag to set start"></div>
+            <div class="time-selector__handle end" title="Drag to set end"></div>
+        </div>
+        <div class="time-selector__labels">
+            <span class="time-selector__label-start"></span>
+            <span class="time-selector__label-range"></span>
+            <span class="time-selector__label-end"></span>
+        </div>
+    `;
+    document.body.appendChild(wrap);
+    return wrap;
+}
+
+function formatTimelineLabel(ms) {
+    if (!ms) return '—';
+    const d = new Date(ms);
+    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function renderTimeSelector() {
+    const container = ensureTimeSelectorContainer();
+    const timelineEl = container.querySelector('.time-selector__timeline');
+    const dotsEl = container.querySelector('.time-selector__dots');
+    const selectionEl = container.querySelector('.time-selector__selection');
+    const startHandle = container.querySelector('.time-selector__handle.start');
+    const endHandle = container.querySelector('.time-selector__handle.end');
+    const startLabel = container.querySelector('.time-selector__label-start');
+    const endLabel = container.querySelector('.time-selector__label-end');
+    const rangeLabel = container.querySelector('.time-selector__label-range');
+
+    const games = (stats && stats[currentMode] && stats[currentMode].games ? stats[currentMode].games : []).filter(g => g && g.startTime);
+    if (!games.length) {
+        container.classList.add('time-selector--empty');
+        dotsEl.innerHTML = '';
+        selectionEl.style.width = '0';
+        selectionEl.style.left = '0';
+        startLabel.textContent = 'No games yet';
+        endLabel.textContent = '';
+        rangeLabel.textContent = '';
+        return;
+    }
+    container.classList.remove('time-selector--empty');
+
+    const times = games
+        .map(g => new Date(g.startTime).getTime())
+        .filter(t => Number.isFinite(t))
+        .sort((a, b) => a - b);
+
+    if (!times.length) {
+        container.classList.add('time-selector--empty');
+        startLabel.textContent = 'No game dates available';
+        endLabel.textContent = '';
+        rangeLabel.textContent = '';
+        dotsEl.innerHTML = '';
+        selectionEl.style.width = '0';
+        selectionEl.style.left = '0';
+        return;
+    }
+
+    const minTime = times[0];
+    const maxTime = times[times.length - 1];
+    const span = Math.max(1, maxTime - minTime);
+
+    // Load persisted timeframe or initialize to full range
+    if (!timelineSelection.startMs || timelineSelection.startMs < minTime || timelineSelection.startMs > maxTime) {
+        timelineSelection.startMs = minTime;
+    }
+    // Handle special 'latest' value for end time
+    if (timelineSelection.endMs === 'latest' || !timelineSelection.endMs || timelineSelection.endMs > maxTime || timelineSelection.endMs < minTime) {
+        timelineSelection.endMs = maxTime;
+    }
+    if (timelineSelection.startMs > timelineSelection.endMs) {
+        timelineSelection.startMs = timelineSelection.endMs;
+    }
+
+    dotsEl.innerHTML = '';
+    times.forEach((t) => {
+        const pct = ((t - minTime) / span) * 100;
+        const dot = document.createElement('div');
+        dot.className = 'time-selector__dot';
+        dot.style.left = `${pct}%`;
+        dot.title = new Date(t).toLocaleString();
+        dotsEl.appendChild(dot);
+    });
+
+    function applyPositions() {
+        const startPct = ((timelineSelection.startMs - minTime) / span) * 100;
+        const endPct = ((timelineSelection.endMs - minTime) / span) * 100;
+
+        selectionEl.style.left = `${startPct}%`;
+        selectionEl.style.width = `${Math.max(endPct - startPct, 0)}%`;
+
+        startHandle.style.left = `${startPct}%`;
+        endHandle.style.left = `${endPct}%`;
+
+        startLabel.textContent = formatTimelineLabel(timelineSelection.startMs);
+        endLabel.textContent = formatTimelineLabel(timelineSelection.endMs);
+
+        const gamesInRange = times.filter(t => t >= timelineSelection.startMs && t <= timelineSelection.endMs).length;
+        rangeLabel.textContent = `${gamesInRange} game${gamesInRange === 1 ? '' : 's'} selected`;
+
+        // Expose selection to other code paths if needed
+        container.dataset.timeframeStart = new Date(timelineSelection.startMs).toISOString();
+        container.dataset.timeframeEnd = new Date(timelineSelection.endMs).toISOString();
+        
+        // Persist timeframe to localStorage
+        persistValue(LS_KEYS.timeframeStart, timelineSelection.startMs);
+        // Save 'latest' if end time equals max time, otherwise save the actual time
+        persistValue(LS_KEYS.timeframeEnd, timelineSelection.endMs === maxTime ? 'latest' : timelineSelection.endMs);
+        
+        refreshTimeframe(gamesInRange);
+    }
+
+    const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+    function startDrag(handleType, event) {
+        event.preventDefault();
+        const rect = timelineEl.getBoundingClientRect();
+
+        const onMove = (e) => {
+            const width = rect.width || 1;
+            const pct = clamp((e.clientX - rect.left) / width, 0, 1);
+            const time = minTime + pct * span;
+
+            if (handleType === 'start') {
+                timelineSelection.startMs = Math.min(time, timelineSelection.endMs);
+            } else {
+                timelineSelection.endMs = Math.max(time, timelineSelection.startMs);
+            }
+
+            applyPositions();
+        };
+
+        const onUp = () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+        };
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+    }
+
+    startHandle.onpointerdown = (e) => startDrag('start', e);
+    endHandle.onpointerdown = (e) => startDrag('end', e);
+
+    applyPositions();
+}
+
 function formatWinRate(rate) {
     if (rate === null || rate === undefined || Number.isNaN(rate)) return '—';
     return `${Math.round(rate * 1000) / 10}%`;
@@ -1139,7 +1383,7 @@ function displayStatsAsList() {
         return;
     }
     
-    const rounds = stats[currentMode].rounds;
+    const { rounds } = getFilteredGameData();
     
     if (rounds.length === 0) {
         statsContent.innerHTML = '<p>No country data available</p>';
@@ -1262,7 +1506,7 @@ function displayPerformanceMap() {
         return;
     }
     
-    const rounds = stats[currentMode].rounds;
+    const { rounds } = getFilteredGameData();
     
     if (rounds.length === 0) {
         console.warn('No round data available for map');
@@ -1401,7 +1645,7 @@ function displayGuessesMap() {
         return;
     }
     
-    const rounds = stats[currentMode].rounds;
+    const { rounds, games, gameIndexMap } = getFilteredGameData();
     
     if (rounds.length === 0) {
         console.warn('No round data available for guesses map');
@@ -1444,7 +1688,9 @@ function displayGuessesMap() {
         values.push(val);
         const countryFlag = countryCodeToFlag(round.countryCode);
         const countryName = getCountryName(round.countryCode);
-        hoverTexts.push(`<span style="font-family: 'Twemoji Country Flags', 'Apple Color Emoji', sans-serif;">${countryFlag}</span> ${countryName}<br>Score: ${round.score}<br>Δ Score: ${round.scoreDiff > 0 ? '+' : ''}${round.scoreDiff}<br>${new Date(stats[currentMode].games[round.game]?.startTime).toLocaleDateString()}`);
+        const gameIdx = gameIndexMap ? gameIndexMap[round.game] : round.game;
+        const gameTime = gameIdx !== undefined ? games[gameIdx]?.startTime : null;
+        hoverTexts.push(`<span style="font-family: 'Twemoji Country Flags', 'Apple Color Emoji', sans-serif;">${countryFlag}</span> ${countryName}<br>Score: ${round.score}<br>Δ Score: ${round.scoreDiff > 0 ? '+' : ''}${round.scoreDiff}<br>${gameTime ? new Date(gameTime).toLocaleDateString() : ''}`);
     });
 
     values.push(0);
@@ -1516,7 +1762,7 @@ function displayBoxplot() {
         return;
     }
     
-    const rounds = stats[currentMode].rounds;
+    const { rounds } = getFilteredGameData();
     
     if (rounds.length === 0) {
         console.warn('No round data available for boxplot');
@@ -1841,7 +2087,7 @@ function displayEvolutionGraph() {
         return;
     }
 
-    const rounds = stats[currentMode].rounds;
+    const { rounds, games, gameIndexMap } = getFilteredGameData();
     if (!rounds.length) {
         chartEl.innerHTML = '<p>No data available</p>';
         return;
@@ -1856,7 +2102,8 @@ function displayEvolutionGraph() {
     const texts = [];
     for (const r of rounds) {
         if (country !== 'world' && r.countryCode !== country) continue;
-        const game = stats[currentMode].games[r.game];
+        const gameIdx = gameIndexMap ? gameIndexMap[r.game] : r.game;
+        const game = gameIdx !== undefined ? games[gameIdx] : null;
         const t = game?.startTime ? new Date(game.startTime).getTime() : null;
         if (!t) continue;
         xs.push(t);
