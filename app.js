@@ -111,7 +111,11 @@ function loadPersistedState() {
     const storedEvoCountry = loadPersistedValue(LS_KEYS.evolution_country);
     if (storedEvoCountry) selectedEvolutionCountry = storedEvoCountry;
     const storedTimeframeStart = loadPersistedValue(LS_KEYS.timeframeStart);
-    if (storedTimeframeStart) timelineSelection.startMs = storedTimeframeStart;
+    if (storedTimeframeStart === 'earliest') {
+        timelineSelection.startMs = null;
+    } else if (storedTimeframeStart) {
+        timelineSelection.startMs = storedTimeframeStart;
+    }
     const storedTimeframeEnd = loadPersistedValue(LS_KEYS.timeframeEnd);
     if (storedTimeframeEnd === 'latest') {
         timelineSelection.endMs = null;
@@ -1064,7 +1068,7 @@ function renderTimeSelector() {
     if (!timelineSelection.startMs || timelineSelection.startMs < minTime || timelineSelection.startMs > maxTime) {
         timelineSelection.startMs = minTime;
     }
-    // Handle special 'latest' value for end time
+    // Handle special 'earliest' and 'latest' values
     if (timelineSelection.endMs === 'latest' || !timelineSelection.endMs || timelineSelection.endMs > maxTime || timelineSelection.endMs < minTime) {
         timelineSelection.endMs = maxTime;
     }
@@ -1103,7 +1107,8 @@ function renderTimeSelector() {
         container.dataset.timeframeEnd = new Date(timelineSelection.endMs).toISOString();
         
         // Persist timeframe to localStorage
-        persistValue(LS_KEYS.timeframeStart, timelineSelection.startMs);
+        // Save 'earliest' if start time equals min time, otherwise save the actual time
+        persistValue(LS_KEYS.timeframeStart, timelineSelection.startMs === minTime ? 'earliest' : timelineSelection.startMs);
         // Save 'latest' if end time equals max time, otherwise save the actual time
         persistValue(LS_KEYS.timeframeEnd, timelineSelection.endMs === maxTime ? 'latest' : timelineSelection.endMs);
         
@@ -1122,7 +1127,9 @@ function renderTimeSelector() {
             const time = minTime + pct * span;
 
             if (handleType === 'start') {
-                timelineSelection.startMs = Math.min(time, timelineSelection.endMs);
+                let maxPoint = timelineSelection.endMs;
+                maxPoint -= (maxTime - minTime) * 0.01; // prevent overlap
+                timelineSelection.startMs = Math.min(time, maxPoint);
             } else {
                 timelineSelection.endMs = Math.max(time, timelineSelection.startMs);
             }
