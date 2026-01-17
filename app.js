@@ -308,20 +308,22 @@ function refreshDisplays() {
     const boxplotTitle = document.getElementById('boxplotTitle');
     const evolutionTitle = document.getElementById('evolutionTitle');
 
-    const metric = (document.getElementById('countrylist-metric-select') || { value: 'scoreDiff' }).value;
-    let metricName = 'Score Difference';
-    if (metric === 'guessedFirstRate') 
-        metricName = 'Guessed-First Rate';
-    else if (metric === 'score') 
-        metricName = 'Score';
-    else if (metric === 'distance') 
-        metricName = 'Distance';
 
     if (listTitle) {
-        listTitle.textContent = `${metric !== "guessedFirstRate" ? "Median " : ""}${metricName} Per Country`;
+        const listMetric = (document.getElementById('countrylist-metric-select') || { value: 'scoreDiff' }).value;
+        let listMetricName = 'Score Difference';
+        if (listMetric === 'guessedFirstRate') 
+            listMetricName = 'Guessed-First Rate';
+        else if (listMetric === 'score') 
+            listMetricName = 'Score';
+        else if (listMetric === 'distance') 
+            listMetricName = 'Distance';
+        listTitle.textContent = `${listMetric !== "guessedFirstRate" ? "Median " : ""}${listMetricName} Per Country`;
     }
     if (boxplotTitle) {
-        boxplotTitle.textContent = `${metricName} by Country (Boxplot)`;
+        const boxplotMetric = (document.getElementById('boxplot-metric-select') || { value: 'scoreDiff' }).value;
+        const boxplotMetricName = boxplotMetric === 'score' ? 'Score' : 'Score Difference';
+        boxplotTitle.textContent = `${boxplotMetricName} by Country (Boxplot)`;
     }
     if (evolutionTitle) {
         const evoMetric = (document.getElementById('evolution-metric-select') || { value: 'scoreDiff' }).value;
@@ -1804,55 +1806,167 @@ function displayBoxplot() {
             valuesByCountry[cc].push(round.scoreDiff);
     });
 
-    const countriesWithMedian = Object.keys(valuesByCountry).map(cc => {
+    const countriesWithStats = Object.keys(valuesByCountry).map(cc => {
         const values = valuesByCountry[cc];
         const sorted = [...values].sort((a, b) => a - b);
         const mid = Math.floor(sorted.length / 2);
         const median = sorted.length % 2 === 0 
             ? (sorted[mid - 1] + sorted[mid]) / 2
             : sorted[mid];
-        return { country: cc, median: median, values: values };
+
+        let q1, q3;
+        if (sorted.length >= 4) {
+            const lowerHalf = sorted.slice(0, mid);
+            const upperHalf = sorted.length % 2 === 0 ? sorted.slice(mid) : sorted.slice(mid + 1);
+            const midLower = Math.floor(lowerHalf.length / 2);
+            const midUpper = Math.floor(upperHalf.length / 2);
+            q1 = lowerHalf.length % 2 === 0
+                ? (lowerHalf[midLower - 1] + lowerHalf[midLower]) / 2
+                : lowerHalf[midLower];
+            q3 = upperHalf.length % 2 === 0
+                ? (upperHalf[midUpper - 1] + upperHalf[midUpper]) / 2
+                : upperHalf[midUpper];
+
+            if (sorted.length % 2 === 1) {
+                const lowerHalfIncl = sorted.slice(0, mid + 1);
+                const upperHalfIncl = sorted.slice(mid);
+                const midLowerIncl = Math.floor(lowerHalfIncl.length / 2);
+                const midUpperIncl = Math.floor(upperHalfIncl.length / 2);
+                const q1Incl = lowerHalfIncl.length % 2 === 0
+                    ? (lowerHalfIncl[midLowerIncl - 1] + lowerHalfIncl[midLowerIncl]) / 2
+                    : lowerHalfIncl[midLowerIncl];
+                const q3Incl = upperHalfIncl.length % 2 === 0
+                    ? (upperHalfIncl[midUpperIncl - 1] + upperHalfIncl[midUpperIncl]) / 2
+                    : upperHalfIncl[midUpperIncl];
+                q1 = (q1 + q1Incl) / 2;
+                q3 = (q3 + q3Incl) / 2;
+            }
+        } else {
+            q1 = sorted[0];
+            q3 = sorted[sorted.length - 1];
+        }
+
+        const iqr = q3 - q1;
+
+        /*let whiskerLow = q1 - 1.5 * iqr;
+        let whiskerHigh = q3 + 1.5 * iqr;
+
+        for (let v of sorted) {
+            if (v >= whiskerLow) {
+                whiskerLow = v;
+                break;
+            }
+        }
+
+        for (let i = sorted.length - 1; i >= 0; i--) {
+            const v = sorted[i];
+            if (v <= whiskerHigh) {
+                whiskerHigh = v;
+                break;
+            }
+        }*/
+
+        const minVal = sorted[0];
+        const maxVal = sorted[sorted.length - 1];
+
+        return { 
+            country: cc, 
+            values, 
+            median, 
+            //q1, 
+            //q3, 
+            iqr,
+            //whiskerLow,
+            //whiskerHigh,
+            minVal,
+            maxVal
+        };
     });
     
     // Sort by median (descending)
-    countriesWithMedian.sort((a, b) => b.median - a.median);
+    countriesWithStats.sort((a, b) => b.median - a.median);
     
     // Prepare data for boxplot
-    const traces = countriesWithMedian.map(item => {
+    const traces = countriesWithStats.map((item, index) => {
         const countryFlag = countryCodeToFlag(item.country);
         const countryName = getCountryName(item.country);
         return {
             y: item.values,
             type: 'box',
             name: countryFlag,
-            customdata: item.values.map(() => ({
-                country: item.country,
-                countryFlag: countryFlag,
-                countryName: countryName,
-                median: item.median,
-                count: item.values.length
-            })),
             hovertemplate: 
                 '<b style="font-family: \'Twemoji Country Flags\', \'Apple Color Emoji\', sans-serif;">%{customdata.countryFlag}</b>&nbsp;' +
                 '<b>%{customdata.countryName}</b><br>' +
-                'Score Difference: %{y}<br>' +
+                `${metric === 'score' ? 'Score' : 'Δ Score'}: %{y}<br>` +
                 '<extra></extra>',
             boxmean: false,
+            customdata: item.values.map(() => ({
+                countryFlag: countryFlag,
+                countryName: countryName
+            })),
             marker: {
                 color: '#4caf50'
             }
         };
     });
-    // TODO: better labels for the boxes, not just the outliers
+    
+    // Create bar trace for custom hover data
+    const barTraceData = countriesWithStats.map((item, index) => {
+        const countryFlag = countryCodeToFlag(item.country);
+        const countryName = getCountryName(item.country);
+        
+        return {
+            x: "country",
+            countryFlag: countryFlag,
+            countryName: countryName,
+            median: item.median,
+            //q1: item.q1,
+            //q3: item.q3,
+            iqr: item.iqr,
+            //whiskerLow: item.whiskerLow,
+            //whiskerHigh: item.whiskerHigh,
+            minVal: item.minVal,
+            maxVal: item.maxVal,
+            count: item.values.length
+        };
+    });
+    
+    // Add invisible bar trace with custom hover
+    traces.push({
+        x: barTraceData.map(d => d.countryFlag),
+        y: barTraceData.map(d => d.maxVal - d.minVal < 2 * addToRange ? d.maxVal - d.minVal + 2 * addToRange : d.maxVal - d.minVal),
+        width: 1,
+        base: barTraceData.map(d => d.maxVal - d.minVal < 2 * addToRange ? d.minVal - addToRange : d.minVal),
+        type: 'bar',
+        opacity: 0,
+        hovertemplate: 
+            '<b style="font-family: \'Twemoji Country Flags\', \'Apple Color Emoji\', sans-serif;">%{customdata.countryFlag}</b>&nbsp;' +
+            '<b>%{customdata.countryName}</b><br>' +
+            'Median: %{customdata.median:.0f}<br>' +
+            'IQR: %{customdata.iqr:.0f}<br>' +
+            'Locations: %{customdata.count}<br>' +
+            '<extra></extra>',
+        customdata: barTraceData.map(d => ({
+            countryFlag: d.countryFlag,
+            countryName: d.countryName,
+            median: d.median,
+            iqr: d.iqr,
+            count: d.count
+        })),
+        marker: {
+            color: '#4caf50'
+        },
+        showlegend: false
+    });
     
     // Show only a subset of countries at once (20 countries)
     const visibleCountries = 20;
     const totalCountries = traces.length;
     
     const layout = {
-        title: 'Score Difference Distribution by Country (Sorted by Median)',
+        title: `${metric === 'score' ? 'Score' : 'Score Difference'} Difference Distribution by Country`,
         yaxis: {
-            title: 'Score Difference',
+            title: metric === 'score' ? 'Score' : 'Score Difference',
             range: [ymin - addToRange, ymax + addToRange],
             dtick: 1000,
             zeroline: true,
